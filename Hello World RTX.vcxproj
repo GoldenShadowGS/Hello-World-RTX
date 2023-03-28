@@ -136,18 +136,31 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="Source\Application.cpp" />
+    <ClCompile Include="Source\CommandQueue.cpp" />
+    <ClCompile Include="Source\DescriptorHeap.cpp" />
+    <ClCompile Include="Source\Heap.cpp" />
     <ClCompile Include="Source\Input.cpp" />
     <ClCompile Include="Source\Main.cpp" />
     <ClCompile Include="Source\PCH.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Create</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Create</PrecompiledHeader>
     </ClCompile>
+    <ClCompile Include="Source\Renderer.cpp" />
+    <ClCompile Include="Source\RootSignature.cpp" />
+    <ClCompile Include="Source\SwapChain.cpp" />
     <ClCompile Include="Source\Window.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Source\Application.h" />
+    <ClInclude Include="Source\CommandQueue.h" />
+    <ClInclude Include="Source\DescriptorHeap.h" />
+    <ClInclude Include="Source\Heap.h" />
     <ClInclude Include="Source\Input.h" />
     <ClInclude Include="Source\PCH.h" />
+    <ClInclude Include="Source\Renderer.h" />
+    <ClInclude Include="Source\RootSignature.h" />
+    <ClInclude Include="Source\SwapChain.h" />
+    <ClInclude Include="Source\DX12Utility.h" />
     <ClInclude Include="Source\Window.h" />
   </ItemGroup>
   <ItemGroup>

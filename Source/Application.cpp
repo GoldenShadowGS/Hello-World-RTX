@@ -9,9 +9,7 @@
 Application* Application::AppPtr = nullptr;
 
 Application::Application(HINSTANCE hInstance) : m_hInstance(hInstance), m_FrameTime(0.0f), m_TitleBuffer(nullptr)
-{
-	m_Window.Create(m_hInstance, this, WINDOWTITLE, 1200, 800, FULLSCREENMODE, &Application::WindProcInit);
-}
+{}
 
 Application::~Application()
 {
@@ -25,6 +23,7 @@ int Application::Run()
 	m_Window.Create(m_hInstance, this, WINDOWTITLE, 1200, 800, FULLSCREENMODE, &Application::WindProcInit);
 	if (!m_Window.GetHandle())
 		return 1;
+	m_Renderer.Create(&m_Window);
 	m_Window.Show();
 	InitializeInput();
 
@@ -48,8 +47,11 @@ void Application::Update()
 	Input::Update();
 }
 
-void Application::Render() const
-{}
+void Application::Render() 
+{
+	m_Renderer.StartNextFrame();
+	m_Renderer.Present();
+}
 
 void Application::Exit() const
 {
@@ -146,7 +148,6 @@ LRESULT CALLBACK Application::WindProc(HWND hwindow, UINT message, WPARAM wParam
 		{
 			Update();
 			Render();
-			break; // TODO Break until Renderering is handled
 			return 0;
 		}
 		case WM_KILLFOCUS:
@@ -157,7 +158,7 @@ LRESULT CALLBACK Application::WindProc(HWND hwindow, UINT message, WPARAM wParam
 		case WM_SIZE:
 		{
 			m_Window.ResizedWindow();
-			//m_Renderer->Resize(m_Scene->GetCamera());
+			m_Renderer.Resize();
 			return 0;
 		}
 		break;
@@ -248,7 +249,7 @@ LRESULT CALLBACK Application::WindProc(HWND hwindow, UINT message, WPARAM wParam
 			switch (wParam)
 			{
 			case 'V':
-				//m_Renderer->SetVSync(!m_Renderer->GetVSync());
+				m_Renderer.ToggleVSync();
 				break;
 			case VK_ESCAPE:
 				Exit();
