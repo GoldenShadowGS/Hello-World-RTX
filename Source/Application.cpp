@@ -24,6 +24,7 @@ int Application::Run()
 	if (!m_Window.GetHandle())
 		return 1;
 	m_Renderer.Create(&m_Window);
+
 	m_Window.Show();
 	InitializeInput();
 
@@ -108,6 +109,11 @@ void Application::SetTitle() const
 {
 	swprintf_s(m_TitleBuffer, TITLE_BUFFER_SIZE, L"%s Width:%d Height:%d FPS:%f Size: %zd\n", WINDOWTITLE, m_Window.GetClientWidth(), m_Window.GetClientHeight(), GetFPS(), sizeof(Application));
 	SetWindowTextW(m_Window.GetHandle(), m_TitleBuffer);
+}
+
+void Application::BuildAssets()
+{
+
 }
 
 LRESULT CALLBACK Application::WindProcInit(HWND hwindow, UINT message, WPARAM wParam, LPARAM lParam)
