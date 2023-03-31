@@ -16,7 +16,7 @@ public:
 	void Create(Window* m_Window);
 	void StartNextFrame();
 	void Present();
-	void ExecuteCopyToGPU();
+	void ExecuteCommandList();
 	void Resize();
 	inline void ToggleVSync() { SetVSync(!GetVSync()); }
 	inline void SetVSync(bool vsync) { m_SwapChain.m_VSync = vsync; }

@@ -87,7 +87,7 @@ void Renderer::Present()
 	m_CommandQueue.Flush();
 }
 
-void Renderer::ExecuteCopyToGPU()
+void Renderer::ExecuteCommandList()
 {
 	ThrowIfFailed(m_CommandList->Close());
 	m_CommandQueue.ExecuteCommandList(m_CommandList);
@@ -318,7 +318,7 @@ void Renderer::Create(Window* window)
 
 	m_CommandAllocator = CreateCommandAllocator(m_Device, D3D12_COMMAND_LIST_TYPE_DIRECT);
 	m_CommandList = CreateCommandList(m_Device, m_CommandAllocator, nullptr, D3D12_COMMAND_LIST_TYPE_DIRECT);
-	ThrowIfFailed(m_CommandList->Close());
+
 	constexpr UINT64 UploadHeapSize = 1024ULL * 1024 * 500;
 	constexpr UINT64 DefaultHeapSize = 1024ULL * 1024 * 500;
 	constexpr UINT64 ConstantBufferHeapSize = 1024ULL * 1024 * 8;
