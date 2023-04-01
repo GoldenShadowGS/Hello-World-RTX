@@ -64,4 +64,9 @@ private:
 	// Ray tracing pipeline state properties, retaining the shader identifiers
 	// to use in the Shader Binding Table
 	Microsoft::WRL::ComPtr<ID3D12StateObjectProperties> m_rtStateObjectProps;
+
+	Microsoft::WRL::ComPtr<ID3D12Resource2> m_outputResource;
+	//ComPtr<id3d12descriptorheap> m_srvUavHeap;
+	void CreateRaytracingOutputBuffer(ID3D12Device11* device, HeapManager* heap);
+	void CreateShaderResourceHeap(ID3D12Device11* device, DescriptorHeap* descriptorHeap);
 };

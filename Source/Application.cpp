@@ -28,6 +28,8 @@ int Application::Run()
 		return 1;
 	m_Renderer.Create(&m_Window);
 	BuildAssets(m_Renderer.GetDevice(), m_Renderer.GetCommandList());
+	CreateRaytracingOutputBuffer(m_Renderer.GetDevice(), m_Renderer.GetHeap());
+	CreateShaderResourceHeap(m_Renderer.GetDevice(), m_Renderer.GetDescriptorHeap());
 	m_Window.Show();
 	InitializeInput();
 
@@ -266,7 +268,7 @@ void Application::BuildAssets(ID3D12Device11* device, ID3D12GraphicsCommandList6
 
 		commandList->BuildRaytracingAccelerationStructure(&AS_BuildDesc, 0, nullptr);
 
-		D3D12_RESOURCE_BARRIER uavBarrier;
+		D3D12_RESOURCE_BARRIER uavBarrier = {};
 		uavBarrier.Type = D3D12_RESOURCE_BARRIER_TYPE_UAV;
 		uavBarrier.UAV.pResource = BLASResult.Get();
 		uavBarrier.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
@@ -344,7 +346,7 @@ void Application::BuildAssets(ID3D12Device11* device, ID3D12GraphicsCommandList6
 		instanceDescs.InstanceMask = 0xFF;
 
 		// Index of the hit group invoked upon intersection
-		instanceDescs.InstanceContributionToHitGroupIndex;
+		instanceDescs.InstanceContributionToHitGroupIndex = 0;
 
 		instanceDescs.Flags = D3D12_RAYTRACING_INSTANCE_FLAG_NONE;
 
@@ -378,7 +380,7 @@ void Application::BuildAssets(ID3D12Device11* device, ID3D12GraphicsCommandList6
 		// Wait for the builder to complete by setting a barrier on the resulting
 		// buffer. This can be important in case the rendering is triggered
 		// immediately afterwards, without executing the command list
-		D3D12_RESOURCE_BARRIER uavBarrier;
+		D3D12_RESOURCE_BARRIER uavBarrier = {};
 		uavBarrier.Type = D3D12_RESOURCE_BARRIER_TYPE_UAV;
 		uavBarrier.UAV.pResource = TLASResult.Get();
 		uavBarrier.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
@@ -451,7 +453,7 @@ void Application::CreateRaytracingPipeline(ID3D12Device11* device)
 
 
 	// To be used, each DX12 shader needs a root signature defining which 
-// parameters and buffers will be accessed. 
+	// parameters and buffers will be accessed. 
 	m_rayGenSignature = CreateRayGenSignature(device);
 	m_missSignature = CreateHitSignature(device);
 	m_hitSignature = CreateMissSignature(device);
@@ -472,23 +474,6 @@ void Application::CreateRaytracingPipeline(ID3D12Device11* device)
 	// (eg. Miss and ShadowMiss). Note that the hit shaders are now only referred 
 	// to as hit groups, meaning that the underlying intersection, any-hit and 
 	// closest-hit shaders share the same root signature. 
-	//pipeline.AddLibrary(m_rayGenLibrary.Get(), { L"RayGen" });
-	//pipeline.AddLibrary(m_missLibrary.Get(), { L"Miss" });
-	//pipeline.AddLibrary(m_hitLibrary.Get(), { L"Hit" });
-
-	//pipeline.AddRootSignatureAssociation(m_rayGenSignature.Get(), { L"RayGen" });
-	//pipeline.AddRootSignatureAssociation(m_missSignature.Get(), { L"Miss" });
-	//pipeline.AddRootSignatureAssociation(m_hitSignature.Get(), { L"Hit" });
-
-	//pipeline.AddHitGroup({ L"HitGroup" }, { L"Hit" });
-
-	//pipeline.SetMaxAttributeSize(4);
-	//pipeline.SetMaxPayloadSize(2);
-	//pipeline.SetMaxRecursionDepth(1);
-
-	//The pipeline now has all the information it needs.We generate the pipeline by calling the `Generate`
-	//method of the helper, which creates the array of subobjects and calls	`ID3D12Device5::CreateStateObject`
-	//m_rtStateObject = pipeline.Generate();
 
 	const WCHAR* RayGenName = L"RayGen";
 	const WCHAR* MissName = L"Miss";
@@ -518,7 +503,7 @@ void Application::CreateRaytracingPipeline(ID3D12Device11* device)
 	lib_Desc[2].NumExports = 1;
 	lib_Desc[2].pExports = &exportdesc[2];
 
-	D3D12_STATE_SUBOBJECT subobjects[15];
+	D3D12_STATE_SUBOBJECT subobjects[15] = {};
 	subobjects[0].Type = D3D12_STATE_SUBOBJECT_TYPE_DXIL_LIBRARY;
 	subobjects[0].pDesc = &lib_Desc[0];
 
@@ -683,6 +668,51 @@ void Application::CreateDummyRootSignatures(ID3D12Device11* device)
 	{
 		throw std::logic_error("Could not create the local root signature");
 	}
+}
+
+//-----------------------------------------------------------------------------
+//
+// Allocate the buffer holding the raytracing output, with the same size as the
+// output image
+//
+void Application::CreateRaytracingOutputBuffer(ID3D12Device11* device, HeapManager* heap)
+{
+	D3D12_RESOURCE_DESC resDesc = {};
+	resDesc.DepthOrArraySize = 1;
+	resDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+	// The backbuffer is actually DXGI_FORMAT_R8G8B8A8_UNORM_SRGB, but sRGB 
+	// formats cannot be used with UAVs. For accuracy we should convert to sRGB 
+	// ourselves in the shader 
+	resDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+	resDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
+	resDesc.Width = m_Window.GetClientWidth(); 
+	resDesc.Height = m_Window.GetClientHeight();
+	resDesc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
+	resDesc.MipLevels = 1; resDesc.SampleDesc.Count = 1;
+	m_outputResource = heap->CreateResource(device,DefaultHeap,&resDesc, D3D12_RESOURCE_STATE_COPY_SOURCE);
+}
+
+//-----------------------------------------------------------------------------
+//
+// Create the main heap used by the shaders, which will give access to the
+// raytracing output and the top-level acceleration structure
+//
+void Application::CreateShaderResourceHeap(ID3D12Device11* device, DescriptorHeap* descriptorHeap)
+{ 
+	descriptorHeap->Create(device, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 2, D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE);
+
+	D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc = {};
+	uavDesc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D;
+	D3D12_CPU_DESCRIPTOR_HANDLE srvHandle = descriptorHeap->GetCPUHandle(0);
+	device->CreateUnorderedAccessView(m_outputResource.Get(), nullptr, &uavDesc, srvHandle);
+
+	D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+	srvDesc.Format = DXGI_FORMAT_UNKNOWN;
+	srvDesc.ViewDimension = D3D12_SRV_DIMENSION_RAYTRACING_ACCELERATION_STRUCTURE;
+	srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+	srvDesc.RaytracingAccelerationStructure.Location = TLASResult->GetGPUVirtualAddress();
+	srvHandle = descriptorHeap->GetCPUHandle(1);
+	device->CreateShaderResourceView(nullptr, &srvDesc, srvHandle);
 }
 
 

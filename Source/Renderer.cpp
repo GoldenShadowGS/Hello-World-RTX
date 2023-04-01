@@ -314,7 +314,7 @@ void Renderer::Create(Window* window)
 	//m_RootSignature.Create(m_Device.Get());
 	//BuildRootSignature();
 	//BuildPipeLineState();
-	m_DescriptorHeap.Create(m_Device.Get(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 100, D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE);
+	//m_DescriptorHeap.Create(m_Device.Get(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 100, D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE);
 
 	m_CommandAllocator = CreateCommandAllocator(m_Device, D3D12_COMMAND_LIST_TYPE_DIRECT);
 	m_CommandList = CreateCommandList(m_Device, m_CommandAllocator, nullptr, D3D12_COMMAND_LIST_TYPE_DIRECT);
