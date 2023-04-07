@@ -29,9 +29,9 @@ void CommandQueue::Create(ID3D12Device11* device, D3D12_COMMAND_LIST_TYPE type)
 	assert(m_EventHandle != INVALID_HANDLE_VALUE);
 }
 
-void CommandQueue::ExecuteCommandList(const Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList6>& commandList)
+void CommandQueue::ExecuteCommandList(ID3D12GraphicsCommandList6* commandList)
 {
-	ID3D12CommandList* ppCommandLists[] = { commandList.Get() };
+	ID3D12CommandList* ppCommandLists[] = { commandList };
 	m_CommandQueue->ExecuteCommandLists(_countof(ppCommandLists), ppCommandLists);
 }
 

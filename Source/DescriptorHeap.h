@@ -9,6 +9,7 @@ public:
 	D3D12_CPU_DESCRIPTOR_HANDLE GetCPUHandle(UINT index);
 	D3D12_GPU_DESCRIPTOR_HANDLE GetGPUHandle(UINT index);
 	inline ID3D12DescriptorHeap* GetHeap() { return m_DescriptorHeap.Get(); }
+	inline ID3D12DescriptorHeap** GetAddressOfHeap() { return m_DescriptorHeap.GetAddressOf(); }
 	inline UINT GetUniqueHeapIndex() { return HEAPINDEX++; }
 private:
 	static UINT HEAPINDEX;

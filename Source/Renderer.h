@@ -17,7 +17,6 @@ public:
 	void StartNextFrame();
 	void Present();
 	void ExecuteCommandList();
-	void Resize();
 	inline void ToggleVSync() { SetVSync(!GetVSync()); }
 	inline void SetVSync(bool vsync) { m_SwapChain.m_VSync = vsync; }
 	inline bool GetVSync() const { return m_SwapChain.m_VSync; }
@@ -25,9 +24,11 @@ public:
 	inline ID3D12GraphicsCommandList6* GetCommandList() { return m_CommandList.Get(); }
 	inline DescriptorHeap* GetDescriptorHeap() { return &m_DescriptorHeap; }
 	inline HeapManager* GetHeap() { return &m_Heap; }
+	//inline void SetScissor() { m_SwapChain.SetViewPortScissorRect(m_CommandList.Get()); }
+	//inline SwapChain* GetSwapChain() { return &m_SwapChain; }
 private:
-	void BuildRootSignature();
-	void BuildPipeLineState();
+	//void BuildRootSignature();
+	//void BuildPipeLineState();
 #ifdef _DEBUG
 	//Gets Destructed Last Because it was created First
 	class DebugWrapper
@@ -39,12 +40,13 @@ private:
 #endif
 	// DirectX 12 Objects
 	Microsoft::WRL::ComPtr<ID3D12Device11> m_Device;
+	Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList6> m_CommandList;
+public:
 	CommandQueue m_CommandQueue;
 	SwapChain m_SwapChain;
-	RootSignature m_RootSignature;
-	Microsoft::WRL::ComPtr<ID3D12PipelineState> m_pipelineState;
 	DescriptorHeap m_DescriptorHeap;
-	Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList6> m_CommandList;
+	//RootSignature m_RootSignature;
+	//Microsoft::WRL::ComPtr<ID3D12PipelineState> m_pipelineState;
 	Microsoft::WRL::ComPtr<ID3D12CommandAllocator> m_CommandAllocator;
 	HeapManager m_Heap;
 	friend class Camera;

@@ -11,13 +11,16 @@ public:
 	SwapChain();
 	void Create(ID3D12Device11* device, Window* window, CommandQueue* commandQueue, UINT bufferCount, BOOL vsync);
 	void Present();
-	void Clear(ID3D12GraphicsCommandList6* commandList);
-	void Resize();
+	//void Clear(ID3D12GraphicsCommandList6* commandList);
+	bool Resize();
+	void SetViewPortScissorRect(ID3D12GraphicsCommandList6* commandList);
+	void TransitionBackBuffer(ID3D12GraphicsCommandList6* commandList, D3D12_RESOURCE_STATES beforeState, D3D12_RESOURCE_STATES afterState);
+	void CopyResourceToBackBuffer(ID3D12GraphicsCommandList6* commandList, ID3D12Resource2* resource);
 	inline ID3D12Resource2* GetBackBuffer() { return m_BackBuffers[m_CurrentFrame].Get(); }
-	inline D3D12_CPU_DESCRIPTOR_HANDLE GetRTVCPUDescriptorHandle() { return m_RenderTargetViewHeap.GetCPUHandle(m_CurrentFrame); }
-	inline D3D12_CPU_DESCRIPTOR_HANDLE GetDSVCPUDescriptorHandle() { return m_DepthStencilViewHeap.GetCPUHandle(0); }
+	//inline D3D12_CPU_DESCRIPTOR_HANDLE GetRTVCPUDescriptorHandle() { return m_RenderTargetViewHeap.GetCPUHandle(m_CurrentFrame); }
+	//inline D3D12_CPU_DESCRIPTOR_HANDLE GetDSVCPUDescriptorHandle() { return m_DepthStencilViewHeap.GetCPUHandle(0); }
 private:
-	void UpdateRenderTargetAndDepthViews();
+	void UpdateBackBuffers();
 	void SetViewPort(UINT newWidth, UINT newHeight);
 	void SetScissorRect(UINT newWidth, UINT newHeight);
 public:
@@ -27,10 +30,10 @@ public:
 private:
 	Microsoft::WRL::ComPtr<IDXGISwapChain4> m_SwapChain;
 	std::vector<Microsoft::WRL::ComPtr<ID3D12Resource2>> m_BackBuffers;
-	DescriptorHeap m_RenderTargetViewHeap;
+	//DescriptorHeap m_RenderTargetViewHeap;
 
-	Microsoft::WRL::ComPtr<ID3D12Resource2> m_DepthBuffer;
-	DescriptorHeap m_DepthStencilViewHeap;
+	//Microsoft::WRL::ComPtr<ID3D12Resource2> m_DepthBuffer;
+	//DescriptorHeap m_DepthStencilViewHeap;
 
 	Window* m_Window;
 	CommandQueue* m_CommandQueue;

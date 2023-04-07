@@ -7,7 +7,7 @@ public:
 	CommandQueue();
 	~CommandQueue();
 	void Create(ID3D12Device11* device, D3D12_COMMAND_LIST_TYPE type);
-	void ExecuteCommandList(const Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList6>& commandList);
+	void ExecuteCommandList(ID3D12GraphicsCommandList6* commandList);
 	inline ID3D12CommandQueue* GetPtr() { return m_CommandQueue.Get(); }
 	UINT64 Signal();
 	void WaitForFenceValue(UINT64 fenceValue);

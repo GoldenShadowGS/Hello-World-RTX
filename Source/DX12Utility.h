@@ -115,56 +115,56 @@ inline UINT64 Align64(UINT64 uLocation, UINT64 uAlign)
 	return ((uLocation + (uAlign - 1)) & ~(uAlign - 1));
 }
 
-inline ComPtr<IDxcBlob> CompileShader(
-	D3D12_SHADER_BYTECODE& ShaderByteCode, 
-	const WCHAR* filename, 
-	const WCHAR* entrypoint, 
-	const WCHAR* targetProfile, 
-	IDxcIncludeHandler* IncludeHandler,
-	LPCWSTR* args, 
-	UINT argCount, 
-	IDxcLibrary* Library, 
-	IDxcCompiler* Compiler)
-{
-	uint32_t codePage = CP_UTF8;
-	ComPtr<IDxcBlobEncoding> sourceBlob;
-	HRESULT hr = Library->CreateBlobFromFile(filename, &codePage, &sourceBlob);
-	ThrowIfFailed(hr);
-
-	ComPtr<IDxcOperationResult> result;
-	hr = Compiler->Compile(
-		sourceBlob.Get(),			// pSource
-		filename,					// pSourceName
-		entrypoint,					// pEntryPoint
-		targetProfile,				// pTargetProfile
-		args, argCount,				// pArguments, argCount
-		NULL, 0,					// pDefines, defineCount
-		IncludeHandler,				// pIncludeHandler
-		&result);					// ppResult
-	if (SUCCEEDED(hr))
-		result->GetStatus(&hr);
-	if (FAILED(hr))
-	{
-		if (result)
-		{
-			ComPtr<IDxcBlobEncoding> errorsBlob;
-			hr = result->GetErrorBuffer(&errorsBlob);
-			if (SUCCEEDED(hr) && errorsBlob)
-			{
-				WCHAR Buffer[1024] = {};
-				swprintf_s(Buffer, 256, L"%s Compilation failed with errors:\n%hs", filename, (const char*)errorsBlob->GetBufferPointer());
-				OutputDebugStringW(Buffer);
-			}
-		}
-		// TODO Handle compilation error...
-	}
-	ComPtr<IDxcBlob> compiledCode;
-	result->GetResult(&compiledCode);
-
-	ShaderByteCode.pShaderBytecode = compiledCode->GetBufferPointer();
-	ShaderByteCode.BytecodeLength = compiledCode->GetBufferSize();
-	return compiledCode;
-}
+//inline ComPtr<IDxcBlob> CompileShader(
+//	D3D12_SHADER_BYTECODE& ShaderByteCode, 
+//	const WCHAR* filename, 
+//	const WCHAR* entrypoint, 
+//	const WCHAR* targetProfile, 
+//	IDxcIncludeHandler* IncludeHandler,
+//	LPCWSTR* args, 
+//	UINT argCount, 
+//	IDxcLibrary* Library, 
+//	IDxcCompiler* Compiler)
+//{
+//	uint32_t codePage = CP_UTF8;
+//	ComPtr<IDxcBlobEncoding> sourceBlob;
+//	HRESULT hr = Library->CreateBlobFromFile(filename, &codePage, &sourceBlob);
+//	ThrowIfFailed(hr);
+//
+//	ComPtr<IDxcOperationResult> result;
+//	hr = Compiler->Compile(
+//		sourceBlob.Get(),			// pSource
+//		filename,					// pSourceName
+//		entrypoint,					// pEntryPoint
+//		targetProfile,				// pTargetProfile
+//		args, argCount,				// pArguments, argCount
+//		NULL, 0,					// pDefines, defineCount
+//		IncludeHandler,				// pIncludeHandler
+//		&result);					// ppResult
+//	if (SUCCEEDED(hr))
+//		result->GetStatus(&hr);
+//	if (FAILED(hr))
+//	{
+//		if (result)
+//		{
+//			ComPtr<IDxcBlobEncoding> errorsBlob;
+//			hr = result->GetErrorBuffer(&errorsBlob);
+//			if (SUCCEEDED(hr) && errorsBlob)
+//			{
+//				WCHAR Buffer[1024] = {};
+//				swprintf_s(Buffer, 256, L"%s Compilation failed with errors:\n%hs", filename, (const char*)errorsBlob->GetBufferPointer());
+//				OutputDebugStringW(Buffer);
+//			}
+//		}
+//		// TODO Handle compilation error...
+//	}
+//	ComPtr<IDxcBlob> compiledCode;
+//	result->GetResult(&compiledCode);
+//
+//	ShaderByteCode.pShaderBytecode = compiledCode->GetBufferPointer();
+//	ShaderByteCode.BytecodeLength = compiledCode->GetBufferSize();
+//	return compiledCode;
+//}
 
 //--------------------------------------------------------------------------------------------------
 // Compile a HLSL file into a DXIL library

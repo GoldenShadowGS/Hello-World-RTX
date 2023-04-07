@@ -79,12 +79,12 @@ void SwapChain::Create(ID3D12Device11* device, Window* window, CommandQueue* com
 	m_BackBuffers.resize(m_NumBuffers);
 
 	// Initialize Descriptor Heap for RenderTargetViews
-	m_RenderTargetViewHeap.Create(m_Device, D3D12_DESCRIPTOR_HEAP_TYPE_RTV, m_NumBuffers, D3D12_DESCRIPTOR_HEAP_FLAG_NONE);
+	//m_RenderTargetViewHeap.Create(m_Device, D3D12_DESCRIPTOR_HEAP_TYPE_RTV, m_NumBuffers, D3D12_DESCRIPTOR_HEAP_FLAG_NONE);
 	// Initialize Descriptor Heap for Depth Buffer
-	m_DepthStencilViewHeap.Create(m_Device, D3D12_DESCRIPTOR_HEAP_TYPE_DSV, 1, D3D12_DESCRIPTOR_HEAP_FLAG_NONE);
+	//m_DepthStencilViewHeap.Create(m_Device, D3D12_DESCRIPTOR_HEAP_TYPE_DSV, 1, D3D12_DESCRIPTOR_HEAP_FLAG_NONE);
 
 	// Initialize Depth Buffer Resource
-	m_DepthBuffer = CreateDepthBuffer(m_Device, m_BufferWidth, m_BufferHeight);
+	//m_DepthBuffer = CreateDepthBuffer(m_Device, m_BufferWidth, m_BufferHeight);
 
 	// Initialize Render Target Buffer Resources
 	DXGI_SWAP_CHAIN_DESC1 swapChainDesc = {};
@@ -113,7 +113,7 @@ void SwapChain::Create(ID3D12Device11* device, Window* window, CommandQueue* com
 
 	m_CurrentFrame = m_SwapChain->GetCurrentBackBufferIndex();
 
-	UpdateRenderTargetAndDepthViews();
+	UpdateBackBuffers();
 	SetViewPort(m_BufferWidth, m_BufferHeight);
 	SetScissorRect(m_BufferWidth, m_BufferHeight);
 }
@@ -126,18 +126,23 @@ void SwapChain::Present()
 	m_CurrentFrame = m_SwapChain->GetCurrentBackBufferIndex();
 }
 
-void SwapChain::Clear(ID3D12GraphicsCommandList6* commandList)
+void SwapChain::CopyResourceToBackBuffer(ID3D12GraphicsCommandList6* commandList, ID3D12Resource2* resource)
 {
-	const D3D12_CPU_DESCRIPTOR_HANDLE rtvHandle = GetRTVCPUDescriptorHandle();
-	const D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle = GetDSVCPUDescriptorHandle();
-	commandList->RSSetViewports(1, &m_ViewPort);
-	commandList->RSSetScissorRects(1, &m_ScissorRect);
-	commandList->OMSetRenderTargets(1, &rtvHandle, FALSE, &dsvHandle);
-	commandList->ClearRenderTargetView(rtvHandle, m_ClearColor, 0, nullptr);
-	commandList->ClearDepthStencilView(dsvHandle, D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0, 0, nullptr);
+	commandList->CopyResource(m_BackBuffers[m_CurrentFrame].Get(), resource);
 }
 
-void SwapChain::Resize()
+//void SwapChain::Clear(ID3D12GraphicsCommandList6* commandList)
+//{
+//	const D3D12_CPU_DESCRIPTOR_HANDLE rtvHandle = GetRTVCPUDescriptorHandle();
+//	const D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle = GetDSVCPUDescriptorHandle();
+//	commandList->RSSetViewports(1, &m_ViewPort);
+//	commandList->RSSetScissorRects(1, &m_ScissorRect);
+//	commandList->OMSetRenderTargets(1, &rtvHandle, FALSE, &dsvHandle);
+//	commandList->ClearRenderTargetView(rtvHandle, m_ClearColor, 0, nullptr);
+//	commandList->ClearDepthStencilView(dsvHandle, D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0, 0, nullptr);
+//}
+
+bool SwapChain::Resize()
 {
 	UINT newWidth = m_Window->GetClientWidth();
 	UINT newHeight = m_Window->GetClientHeight();
@@ -157,7 +162,7 @@ void SwapChain::Resize()
 		{
 			m_BackBuffers[i].Reset();
 		}
-		m_DepthBuffer.Reset();
+		//m_DepthBuffer.Reset();
 
 		DXGI_SWAP_CHAIN_DESC swapChainDesc = {};
 		ThrowIfFailed(m_SwapChain->GetDesc(&swapChainDesc));
@@ -165,25 +170,38 @@ void SwapChain::Resize()
 		m_CurrentFrame = m_SwapChain->GetCurrentBackBufferIndex();
 
 		// Resize Depth Buffer
-		m_DepthBuffer = CreateDepthBuffer(m_Device, m_BufferWidth, m_BufferHeight);
+		//m_DepthBuffer = CreateDepthBuffer(m_Device, m_BufferWidth, m_BufferHeight);
 
-		UpdateRenderTargetAndDepthViews();
+		UpdateBackBuffers();
+		return true;
 	}
+	return false;
 }
 
-void SwapChain::UpdateRenderTargetAndDepthViews()
+void SwapChain::SetViewPortScissorRect(ID3D12GraphicsCommandList6* commandList)
+{
+	commandList->RSSetViewports(1, &m_ViewPort);
+	commandList->RSSetScissorRects(1, &m_ScissorRect);
+}
+
+void SwapChain::TransitionBackBuffer(ID3D12GraphicsCommandList6* commandList, D3D12_RESOURCE_STATES beforeState, D3D12_RESOURCE_STATES afterState)
+{
+	TransitionResource(commandList, m_BackBuffers[m_CurrentFrame].Get(), beforeState, afterState);
+}
+
+void SwapChain::UpdateBackBuffers()
 {
 	for (UINT i = 0; i < m_NumBuffers; i++)
 	{
 		ThrowIfFailed(m_SwapChain->GetBuffer(i, IID_PPV_ARGS(&m_BackBuffers[i])));
-		m_Device->CreateRenderTargetView(m_BackBuffers[i].Get(), nullptr, m_RenderTargetViewHeap.GetCPUHandle(i));
+		//m_Device->CreateRenderTargetView(m_BackBuffers[i].Get(), nullptr, m_RenderTargetViewHeap.GetCPUHandle(i));
 	}
-	D3D12_DEPTH_STENCIL_VIEW_DESC dsv = {};
-	dsv.Format = DXGI_FORMAT_D32_FLOAT;
-	dsv.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2D;
-	dsv.Texture2D.MipSlice = 0;
-	dsv.Flags = D3D12_DSV_FLAG_NONE;
-	m_Device->CreateDepthStencilView(m_DepthBuffer.Get(), &dsv, m_DepthStencilViewHeap.GetCPUHandle(0));
+	//D3D12_DEPTH_STENCIL_VIEW_DESC dsv = {};
+	//dsv.Format = DXGI_FORMAT_D32_FLOAT;
+	//dsv.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2D;
+	//dsv.Texture2D.MipSlice = 0;
+	//dsv.Flags = D3D12_DSV_FLAG_NONE;
+	//m_Device->CreateDepthStencilView(m_DepthBuffer.Get(), &dsv, m_DepthStencilViewHeap.GetCPUHandle(0));
 }
 
 void SwapChain::SetViewPort(UINT newWidth, UINT newHeight)

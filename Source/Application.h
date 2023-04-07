@@ -15,6 +15,7 @@ public:
 	Application(HINSTANCE hInstance);
 	~Application();
 	int Run();
+	void Resize();
 	void Update();
 	void Render();
 	void Exit() const;
@@ -31,6 +32,8 @@ private:
 	LRESULT CALLBACK WindProc(HWND hwindow, UINT message, WPARAM wParam, LPARAM lParam);
 	float m_FrameTime;
 	WCHAR* m_TitleBuffer;
+
+	void OnInit();
 	// Assets
 	void BuildAssets(ID3D12Device11* device, ID3D12GraphicsCommandList6* commandList);
 
@@ -45,7 +48,8 @@ private:
 	Microsoft::WRL::ComPtr<ID3D12Resource2> descriptorsBuffer;
 
 	// #DXR
-	Microsoft::WRL::ComPtr<ID3D12RootSignature> CreateRayGenSignature(ID3D12Device11* device);
+	void CreateRayGenSignature(ID3D12Device11* device);
+	Microsoft::WRL::ComPtr<ID3D12RootSignature> CreateRayGenSignature2();
 	Microsoft::WRL::ComPtr<ID3D12RootSignature> CreateMissSignature(ID3D12Device11* device);
 	Microsoft::WRL::ComPtr<ID3D12RootSignature> CreateHitSignature(ID3D12Device11* device);
 	void CreateRaytracingPipeline(ID3D12Device11* device);
@@ -56,9 +60,9 @@ private:
 	Microsoft::WRL::ComPtr<ID3D12RootSignature> m_hitSignature;
 	Microsoft::WRL::ComPtr<ID3D12RootSignature> m_missSignature;
 
-	void CreateDummyRootSignatures(ID3D12Device11* device);
-	Microsoft::WRL::ComPtr<ID3D12RootSignature> m_DummyGlobalRootSignature;
-	Microsoft::WRL::ComPtr<ID3D12RootSignature> m_DummyLocalRootSignature;
+	void CreateRootSignatures(ID3D12Device11* device);
+	Microsoft::WRL::ComPtr<ID3D12RootSignature> m_GlobalRootSignature;
+	Microsoft::WRL::ComPtr<ID3D12RootSignature> m_LocalRootSignature;
 	// Ray tracing pipeline state
 	Microsoft::WRL::ComPtr<ID3D12StateObject> m_rtStateObject;
 	// Ray tracing pipeline state properties, retaining the shader identifiers
@@ -66,7 +70,15 @@ private:
 	Microsoft::WRL::ComPtr<ID3D12StateObjectProperties> m_rtStateObjectProps;
 
 	Microsoft::WRL::ComPtr<ID3D12Resource2> m_outputResource;
-	//ComPtr<id3d12descriptorheap> m_srvUavHeap;
-	void CreateRaytracingOutputBuffer(ID3D12Device11* device, HeapManager* heap);
+
+	void CreateRaytracingOutputBuffer();
 	void CreateShaderResourceHeap(ID3D12Device11* device, DescriptorHeap* descriptorHeap);
+
+	void CreateShaderBindingTable(ID3D12Device11* device, DescriptorHeap* descriptorHeap);
+	Microsoft::WRL::ComPtr<ID3D12Resource2> m_ShaderBindingTable;
+
+	const WCHAR* RayGenName = L"RayGen";
+	const WCHAR* MissName = L"Miss";
+	const WCHAR* ClosestHitName = L"ClosestHit";
+	const WCHAR* HitGroupName = L"HitGroup";
 };

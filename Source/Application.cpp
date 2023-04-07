@@ -27,9 +27,7 @@ int Application::Run()
 	if (!m_Window.GetHandle())
 		return 1;
 	m_Renderer.Create(&m_Window);
-	BuildAssets(m_Renderer.GetDevice(), m_Renderer.GetCommandList());
-	CreateRaytracingOutputBuffer(m_Renderer.GetDevice(), m_Renderer.GetHeap());
-	CreateShaderResourceHeap(m_Renderer.GetDevice(), m_Renderer.GetDescriptorHeap());
+	OnInit();
 	m_Window.Show();
 	InitializeInput();
 
@@ -46,6 +44,15 @@ int Application::Run()
 	return 0;
 }
 
+void Application::Resize()
+{
+	m_Window.ResizedWindow();
+	if (m_Renderer.m_SwapChain.Resize())
+	{
+		CreateRaytracingOutputBuffer();
+	}
+}
+
 void Application::Update()
 {
 	UpdateFrameTime();
@@ -55,8 +62,53 @@ void Application::Update()
 
 void Application::Render()
 {
-	m_Renderer.StartNextFrame();
-	m_Renderer.Present();
+	ID3D12CommandAllocator* commandAllocator = m_Renderer.m_CommandAllocator.Get();
+	ID3D12GraphicsCommandList6* commandList = m_Renderer.GetCommandList();
+
+	ThrowIfFailed(commandAllocator->Reset());
+	ThrowIfFailed(commandList->Reset(commandAllocator, nullptr));
+
+	m_Renderer.m_SwapChain.TransitionBackBuffer(commandList, D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_COPY_DEST);
+
+	TransitionResource(commandList, m_outputResource.Get(), D3D12_RESOURCE_STATE_COPY_SOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+
+	//Do Ray Tracing on Output now
+
+	commandList->SetDescriptorHeaps(1, m_Renderer.GetDescriptorHeap()->GetAddressOfHeap());
+
+	commandList->SetComputeRootSignature(m_GlobalRootSignature.Get());
+
+	D3D12_DISPATCH_RAYS_DESC DispatchDesc = {};
+
+	DispatchDesc.RayGenerationShaderRecord.StartAddress = m_ShaderBindingTable->GetGPUVirtualAddress();
+	DispatchDesc.RayGenerationShaderRecord.SizeInBytes = 64;
+	DispatchDesc.MissShaderTable.StartAddress = DispatchDesc.RayGenerationShaderRecord.StartAddress + DispatchDesc.RayGenerationShaderRecord.SizeInBytes;
+	DispatchDesc.MissShaderTable.SizeInBytes = 64;
+	DispatchDesc.MissShaderTable.StrideInBytes = 64;
+	DispatchDesc.HitGroupTable.StartAddress = DispatchDesc.MissShaderTable.StartAddress + DispatchDesc.MissShaderTable.SizeInBytes;
+	DispatchDesc.HitGroupTable.SizeInBytes = 64;
+	DispatchDesc.HitGroupTable.StrideInBytes = 64;
+	DispatchDesc.CallableShaderTable;
+	DispatchDesc.Width = m_Window.GetClientWidth();
+	DispatchDesc.Height = m_Window.GetClientHeight();
+	DispatchDesc.Depth = 1;
+
+	commandList->SetPipelineState1(m_rtStateObject.Get());
+	// Dispatch the rays and write to the raytracing output
+	commandList->DispatchRays(&DispatchDesc);
+
+
+	//Copy Output to Backbuffer
+	TransitionResource(commandList, m_outputResource.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COPY_SOURCE);
+	m_Renderer.m_SwapChain.CopyResourceToBackBuffer(commandList, m_outputResource.Get());
+
+	m_Renderer.m_SwapChain.TransitionBackBuffer(commandList, D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_PRESENT);
+
+	ThrowIfFailed(commandList->Close());
+
+	m_Renderer.m_CommandQueue.ExecuteCommandList(commandList);
+	m_Renderer.m_SwapChain.Present();
+	m_Renderer.m_CommandQueue.Flush();
 }
 
 void Application::Exit() const
@@ -114,6 +166,27 @@ void Application::SetTitle() const
 {
 	swprintf_s(m_TitleBuffer, TITLE_BUFFER_SIZE, L"%s Width:%d Height:%d FPS:%f Size: %zd\n", WINDOWTITLE, m_Window.GetClientWidth(), m_Window.GetClientHeight(), GetFPS(), sizeof(Application));
 	SetWindowTextW(m_Window.GetHandle(), m_TitleBuffer);
+}
+
+void Application::OnInit()
+{
+	BuildAssets(m_Renderer.GetDevice(), m_Renderer.GetCommandList());
+	CreateRaytracingPipeline(m_Renderer.GetDevice());
+
+
+	CreateRaytracingOutputBuffer();
+
+	D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+	srvDesc.Format = DXGI_FORMAT_UNKNOWN;
+	srvDesc.ViewDimension = D3D12_SRV_DIMENSION_RAYTRACING_ACCELERATION_STRUCTURE;
+	srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+	srvDesc.RaytracingAccelerationStructure.Location = TLASResult->GetGPUVirtualAddress();
+	D3D12_CPU_DESCRIPTOR_HANDLE srvHandle = m_Renderer.m_DescriptorHeap.GetCPUHandle(1);
+	m_Renderer.GetDevice()->CreateShaderResourceView(nullptr, &srvDesc, srvHandle);
+
+	CreateShaderBindingTable(m_Renderer.GetDevice(), m_Renderer.GetDescriptorHeap());
+
+	m_Renderer.ExecuteCommandList();
 }
 
 void Application::BuildAssets(ID3D12Device11* device, ID3D12GraphicsCommandList6* commandList)
@@ -387,29 +460,71 @@ void Application::BuildAssets(ID3D12Device11* device, ID3D12GraphicsCommandList6
 		commandList->ResourceBarrier(1, &uavBarrier);
 
 	}
-
-	CreateRaytracingPipeline(device);
-
-
-
-
-	m_Renderer.ExecuteCommandList();
 }
 
 //-----------------------------------------------------------------------------
 // The ray generation shader needs to access 2 resources: the raytracing output
 // and the top-level acceleration structure
 //
-ComPtr<ID3D12RootSignature> Application::CreateRayGenSignature(ID3D12Device11* device)
+
+ComPtr<ID3D12RootSignature> Application::CreateRayGenSignature2()
 {
 	nv_helpers_dx12::RootSignatureGenerator rsc;
 	rsc.AddHeapRangesParameter(
-		{
-			{0 /*u0*/, 1 /*1 descriptor */, 0 /*use the implicit register space 0*/, D3D12_DESCRIPTOR_RANGE_TYPE_UAV /* UAV representing the output buffer*/, 0 /*heap slot where the UAV is defined*/},
-			{0 /*t0*/, 1, 0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV /*Top-level acceleration structure*/, 1}
-		}
-	);
-	return rsc.Generate(device, true);
+		{ {0 /*u0*/, 1 /*1 descriptor */, 0 /*use the implicit register space 0*/,
+		  D3D12_DESCRIPTOR_RANGE_TYPE_UAV /* UAV representing the output buffer*/,
+		  0 /*heap slot where the UAV is defined*/},
+		 {0 /*t0*/, 1, 0,
+		  D3D12_DESCRIPTOR_RANGE_TYPE_SRV /*Top-level acceleration structure*/,
+		  1} });
+
+	return rsc.Generate(m_Renderer.GetDevice(), true);
+}
+
+void Application::CreateRayGenSignature(ID3D12Device11* device)
+{
+	D3D12_DESCRIPTOR_RANGE ranges[2] = {};
+
+	ranges[0].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_UAV;
+	ranges[0].NumDescriptors = 1;
+	ranges[0].BaseShaderRegister = 0;
+	ranges[0].RegisterSpace = 0;
+	ranges[0].OffsetInDescriptorsFromTableStart = 0;
+
+	ranges[1].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
+	ranges[1].NumDescriptors = 1;
+	ranges[1].BaseShaderRegister = 0;
+	ranges[1].RegisterSpace = 0;
+	ranges[1].OffsetInDescriptorsFromTableStart = 1;
+
+
+	D3D12_ROOT_PARAMETER parameters[2] = {};
+
+	parameters[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+	parameters[0].DescriptorTable.NumDescriptorRanges = 1;
+	parameters[0].DescriptorTable.pDescriptorRanges = &ranges[0];
+	parameters[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+
+	parameters[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+	parameters[1].DescriptorTable.NumDescriptorRanges = 1;
+	parameters[1].DescriptorTable.pDescriptorRanges = &ranges[1];
+	parameters[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+
+	// Specify the root signature with its set of parameters
+	D3D12_ROOT_SIGNATURE_DESC rootDesc = {};
+	rootDesc.NumParameters = 2;
+	rootDesc.pParameters = parameters;
+	rootDesc.Flags = D3D12_ROOT_SIGNATURE_FLAG_LOCAL_ROOT_SIGNATURE;
+
+	// Create the root signature from its descriptor
+	ID3DBlob* pSigBlob;
+	ID3DBlob* pErrorBlob;
+	HRESULT hr = D3D12SerializeRootSignature(&rootDesc, D3D_ROOT_SIGNATURE_VERSION_1_0, &pSigBlob,
+		&pErrorBlob);
+
+
+	ThrowIfFailed(device->CreateRootSignature(0, pSigBlob->GetBufferPointer(), pSigBlob->GetBufferSize(),
+		IID_PPV_ARGS(&m_rayGenSignature)));
 }
 
 //-----------------------------------------------------------------------------
@@ -418,7 +533,11 @@ ComPtr<ID3D12RootSignature> Application::CreateRayGenSignature(ID3D12Device11* d
 //
 ComPtr<ID3D12RootSignature> Application::CreateHitSignature(ID3D12Device11* device)
 {
+	//nv_helpers_dx12::RootSignatureGenerator rsc;
+	//return rsc.Generate(device, true);
+
 	nv_helpers_dx12::RootSignatureGenerator rsc;
+	rsc.AddRootParameter(D3D12_ROOT_PARAMETER_TYPE_SRV);
 	return rsc.Generate(device, true);
 }
 
@@ -454,11 +573,11 @@ void Application::CreateRaytracingPipeline(ID3D12Device11* device)
 
 	// To be used, each DX12 shader needs a root signature defining which 
 	// parameters and buffers will be accessed. 
-	m_rayGenSignature = CreateRayGenSignature(device);
+	m_rayGenSignature = CreateRayGenSignature2();
 	m_missSignature = CreateHitSignature(device);
 	m_hitSignature = CreateMissSignature(device);
 
-	CreateDummyRootSignatures(device);
+	CreateRootSignatures(device);
 
 	// To be used, each shader needs to be associated to its root signature.
 	// A shaders imported from the DXIL libraries needs to be associated with 
@@ -475,10 +594,10 @@ void Application::CreateRaytracingPipeline(ID3D12Device11* device)
 	// to as hit groups, meaning that the underlying intersection, any-hit and 
 	// closest-hit shaders share the same root signature. 
 
-	const WCHAR* RayGenName = L"RayGen";
-	const WCHAR* MissName = L"Miss";
-	const WCHAR* ClosestHitName = L"ClosestHit";
-	const WCHAR* HitGroupName = L"HitGroup";
+	//const WCHAR* RayGenName = L"RayGen";
+	//const WCHAR* MissName = L"Miss";
+	//const WCHAR* ClosestHitName = L"ClosestHit";
+	//const WCHAR* HitGroupName = L"HitGroup";
 
 	const WCHAR* exports[3] = { RayGenName, MissName, ClosestHitName };
 
@@ -566,8 +685,6 @@ void Application::CreateRaytracingPipeline(ID3D12Device11* device)
 	subobjects[9].Type = D3D12_STATE_SUBOBJECT_TYPE_SUBOBJECT_TO_EXPORTS_ASSOCIATION;
 	subobjects[9].pDesc = &exportsAssociation[1];
 
-
-
 	subobjects[10].Type = D3D12_STATE_SUBOBJECT_TYPE_LOCAL_ROOT_SIGNATURE;
 	subobjects[10].pDesc = &localrootSignatures[2];
 
@@ -578,16 +695,16 @@ void Application::CreateRaytracingPipeline(ID3D12Device11* device)
 	subobjects[11].Type = D3D12_STATE_SUBOBJECT_TYPE_SUBOBJECT_TO_EXPORTS_ASSOCIATION;
 	subobjects[11].pDesc = &exportsAssociation[2];
 
-
+	//------------------------------
 	D3D12_GLOBAL_ROOT_SIGNATURE globalRootSig = {};
-	globalRootSig.pGlobalRootSignature = m_DummyGlobalRootSignature.Get();
+	globalRootSig.pGlobalRootSignature = m_GlobalRootSignature.Get();
 
 	subobjects[12].Type = D3D12_STATE_SUBOBJECT_TYPE_GLOBAL_ROOT_SIGNATURE;
 	subobjects[12].pDesc = &globalRootSig;
 
 
 	D3D12_LOCAL_ROOT_SIGNATURE localRootSig = {};
-	localRootSig.pLocalRootSignature = m_DummyLocalRootSignature.Get();
+	localRootSig.pLocalRootSignature = m_LocalRootSignature.Get();
 
 	subobjects[13].Type = D3D12_STATE_SUBOBJECT_TYPE_LOCAL_ROOT_SIGNATURE;
 	subobjects[13].pDesc = &localRootSig;
@@ -620,7 +737,7 @@ void Application::CreateRaytracingPipeline(ID3D12Device11* device)
 
 }
 
-void Application::CreateDummyRootSignatures(ID3D12Device11* device)
+void Application::CreateRootSignatures(ID3D12Device11* device)
 {
 	// Creation of the global root signature
 	D3D12_ROOT_SIGNATURE_DESC rootDesc = {};
@@ -643,7 +760,7 @@ void Application::CreateDummyRootSignatures(ID3D12Device11* device)
 	}
 	hr = device->CreateRootSignature(0, serializedRootSignature->GetBufferPointer(),
 		serializedRootSignature->GetBufferSize(),
-		IID_PPV_ARGS(&m_DummyGlobalRootSignature));
+		IID_PPV_ARGS(&m_GlobalRootSignature));
 
 	serializedRootSignature->Release();
 	if (FAILED(hr))
@@ -661,7 +778,7 @@ void Application::CreateDummyRootSignatures(ID3D12Device11* device)
 	}
 	hr = device->CreateRootSignature(0, serializedRootSignature->GetBufferPointer(),
 		serializedRootSignature->GetBufferSize(),
-		IID_PPV_ARGS(&m_DummyLocalRootSignature));
+		IID_PPV_ARGS(&m_LocalRootSignature));
 
 	serializedRootSignature->Release();
 	if (FAILED(hr))
@@ -675,8 +792,13 @@ void Application::CreateDummyRootSignatures(ID3D12Device11* device)
 // Allocate the buffer holding the raytracing output, with the same size as the
 // output image
 //
-void Application::CreateRaytracingOutputBuffer(ID3D12Device11* device, HeapManager* heap)
+void Application::CreateRaytracingOutputBuffer()
 {
+	ID3D12Device11* device = m_Renderer.GetDevice();
+
+	D3D12_HEAP_PROPERTIES heapProp = { };
+	heapProp.Type = D3D12_HEAP_TYPE_DEFAULT;
+
 	D3D12_RESOURCE_DESC resDesc = {};
 	resDesc.DepthOrArraySize = 1;
 	resDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
@@ -685,11 +807,18 @@ void Application::CreateRaytracingOutputBuffer(ID3D12Device11* device, HeapManag
 	// ourselves in the shader 
 	resDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
 	resDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
-	resDesc.Width = m_Window.GetClientWidth(); 
+	resDesc.Width = m_Window.GetClientWidth();
 	resDesc.Height = m_Window.GetClientHeight();
 	resDesc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
-	resDesc.MipLevels = 1; resDesc.SampleDesc.Count = 1;
-	m_outputResource = heap->CreateResource(device,DefaultHeap,&resDesc, D3D12_RESOURCE_STATE_COPY_SOURCE);
+	resDesc.MipLevels = 1;
+	resDesc.SampleDesc.Count = 1;
+
+	device->CreateCommittedResource(&heapProp, D3D12_HEAP_FLAG_NONE, &resDesc, D3D12_RESOURCE_STATE_COPY_SOURCE, nullptr, IID_PPV_ARGS(&m_outputResource));
+
+	D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc = {};
+	uavDesc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D;
+	D3D12_CPU_DESCRIPTOR_HANDLE srvHandle = m_Renderer.m_DescriptorHeap.GetCPUHandle(0);
+	device->CreateUnorderedAccessView(m_outputResource.Get(), nullptr, &uavDesc, srvHandle);
 }
 
 //-----------------------------------------------------------------------------
@@ -697,24 +826,90 @@ void Application::CreateRaytracingOutputBuffer(ID3D12Device11* device, HeapManag
 // Create the main heap used by the shaders, which will give access to the
 // raytracing output and the top-level acceleration structure
 //
-void Application::CreateShaderResourceHeap(ID3D12Device11* device, DescriptorHeap* descriptorHeap)
-{ 
-	descriptorHeap->Create(device, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 2, D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE);
+//void Application::CreateShaderResourceHeap(ID3D12Device11* device, DescriptorHeap* descriptorHeap)
+//{
+//	//descriptorHeap->Create(device, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 2, D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE);
+//
+//
+//
+//	D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+//	srvDesc.Format = DXGI_FORMAT_UNKNOWN;
+//	srvDesc.ViewDimension = D3D12_SRV_DIMENSION_RAYTRACING_ACCELERATION_STRUCTURE;
+//	srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+//	srvDesc.RaytracingAccelerationStructure.Location = TLASResult->GetGPUVirtualAddress();
+//	D3D12_CPU_DESCRIPTOR_HANDLE srvHandle = descriptorHeap->GetCPUHandle(1);
+//	device->CreateShaderResourceView(nullptr, &srvDesc, srvHandle);
+//}
 
-	D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc = {};
-	uavDesc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D;
-	D3D12_CPU_DESCRIPTOR_HANDLE srvHandle = descriptorHeap->GetCPUHandle(0);
-	device->CreateUnorderedAccessView(m_outputResource.Get(), nullptr, &uavDesc, srvHandle);
+void Application::CreateShaderBindingTable(ID3D12Device11* device, DescriptorHeap* descriptorHeap)
+{
+	D3D12_GPU_DESCRIPTOR_HANDLE srvUavHeapHandle = descriptorHeap->GetGPUHandle(0);
 
-	D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
-	srvDesc.Format = DXGI_FORMAT_UNKNOWN;
-	srvDesc.ViewDimension = D3D12_SRV_DIMENSION_RAYTRACING_ACCELERATION_STRUCTURE;
-	srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-	srvDesc.RaytracingAccelerationStructure.Location = TLASResult->GetGPUVirtualAddress();
-	srvHandle = descriptorHeap->GetCPUHandle(1);
-	device->CreateShaderResourceView(nullptr, &srvDesc, srvHandle);
+	UINT shaderIdentifierSize = D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES;
+	ThrowIfFailed(m_rtStateObject.As(&m_rtStateObjectProps));
+
+	void* rayGenShaderIdentifier = m_rtStateObjectProps->GetShaderIdentifier(RayGenName);
+	void* missShaderIdentifier = m_rtStateObjectProps->GetShaderIdentifier(MissName);
+	void* hitGroupShaderIdentifier = m_rtStateObjectProps->GetShaderIdentifier(HitGroupName);
+
+	UINT64 elementSize = 64ULL * 3;
+
+	D3D12_RESOURCE_DESC resDesc = {};
+	resDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+	resDesc.Alignment = 0;
+	resDesc.Width = elementSize;
+	resDesc.Height = 1;
+	resDesc.DepthOrArraySize = 1;
+	resDesc.MipLevels = 1;
+	resDesc.Format = DXGI_FORMAT_UNKNOWN;
+	resDesc.SampleDesc.Count = 1;
+	resDesc.SampleDesc.Quality = 0;
+	resDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+	resDesc.Flags = D3D12_RESOURCE_FLAG_NONE;
+
+	m_ShaderBindingTable = m_Renderer.GetHeap()->CreateResource(device, UploadHeap, &resDesc, D3D12_RESOURCE_STATE_GENERIC_READ);
+
+	void* Source = nullptr;
+	{
+		void* DestinationStart = nullptr;
+		//const void* Source = vertices;
+		//const UINT Size = sizeof(vertices);
+		const D3D12_RANGE readRange = { 0, 0 };
+		ThrowIfFailed(m_ShaderBindingTable->Map(0, &readRange, &DestinationStart));
+		void* Destination = DestinationStart;
+
+		Source = rayGenShaderIdentifier;
+		memcpy(Destination, Source, shaderIdentifierSize);
+		Destination = (UINT8*)Destination + shaderIdentifierSize;
+
+		//Copy Arguments
+		{
+			D3D12_GPU_DESCRIPTOR_HANDLE descriptorhandle = m_Renderer.m_DescriptorHeap.GetGPUHandle(0);
+			UINT64 data = (UINT64)descriptorhandle.ptr;
+			memcpy(Destination, &data, sizeof(data));
+			Destination = (UINT8*)Destination + sizeof(data);
+		}
+		{
+			D3D12_GPU_DESCRIPTOR_HANDLE descriptorhandle = m_Renderer.m_DescriptorHeap.GetGPUHandle(1);
+			UINT64 data = (UINT64)descriptorhandle.ptr;
+			memcpy(Destination, &data, sizeof(data));
+			Destination = (UINT8*)Destination + sizeof(data);
+		}
+
+		Source = missShaderIdentifier;
+		Destination = (UINT8*)DestinationStart + 64ULL;
+		memcpy(Destination, Source, shaderIdentifierSize);
+
+		Source = hitGroupShaderIdentifier;
+		Destination = (UINT8*)DestinationStart + 64ULL * 2;
+		memcpy(Destination, Source, shaderIdentifierSize);
+
+
+		m_ShaderBindingTable->Unmap(0, nullptr);
+	}
+
+	TransitionResource(m_Renderer.GetCommandList(), m_ShaderBindingTable.Get(), D3D12_RESOURCE_STATE_GENERIC_READ, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 }
-
 
 LRESULT CALLBACK Application::WindProcInit(HWND hwindow, UINT message, WPARAM wParam, LPARAM lParam)
 {
@@ -763,8 +958,7 @@ LRESULT CALLBACK Application::WindProc(HWND hwindow, UINT message, WPARAM wParam
 		}
 		case WM_SIZE:
 		{
-			m_Window.ResizedWindow();
-			m_Renderer.Resize();
+			Resize();
 			return 0;
 		}
 		break;
