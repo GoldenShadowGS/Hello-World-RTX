@@ -1,5 +1,6 @@
 #include "PCH.h"
 #include "CommandQueue.h"
+#include "DX12Utility.h"
 
 using Microsoft::WRL::ComPtr;
 

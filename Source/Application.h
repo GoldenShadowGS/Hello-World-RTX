@@ -3,6 +3,7 @@
 #include "Window.h"
 #include "Renderer.h"
 #include "TopLevelASGenerator.h"
+#include "Camera.h"
 
 struct Vertex
 {
@@ -49,7 +50,7 @@ private:
 
 	// #DXR
 	void CreateRayGenSignature(ID3D12Device11* device);
-	Microsoft::WRL::ComPtr<ID3D12RootSignature> CreateRayGenSignature2();
+	//Microsoft::WRL::ComPtr<ID3D12RootSignature> CreateRayGenSignature2();
 	Microsoft::WRL::ComPtr<ID3D12RootSignature> CreateMissSignature(ID3D12Device11* device);
 	Microsoft::WRL::ComPtr<ID3D12RootSignature> CreateHitSignature(ID3D12Device11* device);
 	void CreateRaytracingPipeline(ID3D12Device11* device);
@@ -81,4 +82,5 @@ private:
 	const WCHAR* MissName = L"Miss";
 	const WCHAR* ClosestHitName = L"ClosestHit";
 	const WCHAR* HitGroupName = L"HitGroup";
+	Camera m_Camera;
 };

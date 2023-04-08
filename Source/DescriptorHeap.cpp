@@ -1,5 +1,6 @@
 #include "PCH.h"
 #include "DescriptorHeap.h"
+#include "DX12Utility.h"
 
 UINT DescriptorHeap::HEAPINDEX = 0;
 

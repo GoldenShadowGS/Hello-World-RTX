@@ -6,6 +6,18 @@ RWTexture2D< float4 > gOutput : register(u0);
 // Raytracing acceleration structure, accessed as a SRV
 RaytracingAccelerationStructure SceneBVH : register(t0);
 
+struct Camera
+{
+	float4 position;
+	float4 direction;
+	float4 right;
+	float4 up;
+};
+
+StructuredBuffer<Camera> cam : register (t1, space0);
+
+float4 GLobalLight = normalize(float4(1,1,1,0));
+
 [shader("raygeneration")]
 void RayGen()
 {
@@ -21,8 +33,10 @@ void RayGen()
 	// (often maps to pixels, so this could represent a pixel coordinate).
 
 	RayDesc ray;
-	ray.Origin = float3(0, 0, 1);
-	ray.Direction = float3(d.x, d.y, -1);
+	ray.Origin = cam[0].position.xyz;
+	float3 up = cam[0].up.xyz * d.y;
+	float3 right = cam[0].right.xyz * d.x;
+	ray.Direction = normalize(cam[0].direction.xyz + up + right);
 	ray.TMin = 0;
 	ray.TMax = 100000;
 

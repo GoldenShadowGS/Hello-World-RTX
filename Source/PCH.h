@@ -26,21 +26,5 @@
 #include <sstream>
 #include <map>
 #include <immintrin.h>
- 
-//#include <fstream>
-//#include <sstream>
-//#include <queue>
 #include <vector>
-//#include <thread>
-//#include <atomic>
-
-inline void ThrowIfFailed(HRESULT hr)
-{
-	if (FAILED(hr))
-	{
-		throw std::exception();
-	}
-}
-
-//void* operator new(size_t size);
-//void operator delete(void* p);
+ 

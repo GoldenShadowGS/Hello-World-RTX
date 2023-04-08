@@ -58,6 +58,7 @@ void Application::Update()
 	UpdateFrameTime();
 	SetTitle();
 	Input::Update();
+	m_Camera.Update(m_FrameTime);
 }
 
 void Application::Render()
@@ -170,6 +171,7 @@ void Application::SetTitle() const
 
 void Application::OnInit()
 {
+	m_Camera.CreateResource(m_Renderer.GetDevice(), &m_Renderer.m_DescriptorHeap);
 	BuildAssets(m_Renderer.GetDevice(), m_Renderer.GetCommandList());
 	CreateRaytracingPipeline(m_Renderer.GetDevice());
 
@@ -192,14 +194,18 @@ void Application::OnInit()
 void Application::BuildAssets(ID3D12Device11* device, ID3D12GraphicsCommandList6* commandList)
 {
 	// Data
-	Vertex vertices[] =
-	{
-		{ -0.5f, -0.5f, 0.0f },
-		{ 0.5f, -0.5f, 0.0f },
-		{ 0.0f, 0.5f, 0.0f }
-	};
+	//Vertex vertices[] =
+	//{
+	//	{ -0.5f, -0.5f, 0.0f },
+	//	{ 0.5f, -0.5f, 0.0f },
+	//	{ 0.0f, 0.5f, 0.0f }
+	//};
 
-	UINT indices[] = { 0,1,2 };
+	Vertex vertices[] =
+	{ {0.25,0.25,0.25},{0.25,-0.25,0.25},{0.25,0.25,-0.25},{0.25,-0.25,-0.25},{-0.25,0.25,0.25},{-0.25,-0.25,0.25},{-0.25,0.25,-0.25},{-0.25,-0.25,-0.25} };
+
+	UINT indices[] = { 2,4,0,7,2,3,5,6,7,7,1,5,3,0,1,1,4,5,6,4,2,6,2,7,4,6,5,3,1,7,2,0,3,0,4,1 };
+	//UINT indices[] = { 0,1,2 };
 
 	using namespace DirectX;
 	XMMATRIX matrix = XMMatrixIdentity();
@@ -285,8 +291,8 @@ void Application::BuildAssets(ID3D12Device11* device, ID3D12GraphicsCommandList6
 		geometry_Desc.Triangles.Transform3x4 = Matrix->GetGPUVirtualAddress(); // GPU Resource Address
 		geometry_Desc.Triangles.IndexFormat = DXGI_FORMAT_R32_UINT;
 		geometry_Desc.Triangles.VertexFormat = DXGI_FORMAT_R32G32B32_FLOAT;
-		geometry_Desc.Triangles.IndexCount = 3;
-		geometry_Desc.Triangles.VertexCount = 3;
+		geometry_Desc.Triangles.IndexCount = _countof(indices);
+		geometry_Desc.Triangles.VertexCount = _countof(vertices);
 		geometry_Desc.Triangles.IndexBuffer = IndexBuffer->GetGPUVirtualAddress(); // GPU Resource Address
 		geometry_Desc.Triangles.VertexBuffer.StartAddress = VertexBuffer->GetGPUVirtualAddress(); // GPU Resource Address
 		geometry_Desc.Triangles.VertexBuffer.StrideInBytes = sizeof(Vertex); // GPU Resource Address
@@ -467,23 +473,33 @@ void Application::BuildAssets(ID3D12Device11* device, ID3D12GraphicsCommandList6
 // and the top-level acceleration structure
 //
 
-ComPtr<ID3D12RootSignature> Application::CreateRayGenSignature2()
-{
-	nv_helpers_dx12::RootSignatureGenerator rsc;
-	rsc.AddHeapRangesParameter(
-		{ {0 /*u0*/, 1 /*1 descriptor */, 0 /*use the implicit register space 0*/,
-		  D3D12_DESCRIPTOR_RANGE_TYPE_UAV /* UAV representing the output buffer*/,
-		  0 /*heap slot where the UAV is defined*/},
-		 {0 /*t0*/, 1, 0,
-		  D3D12_DESCRIPTOR_RANGE_TYPE_SRV /*Top-level acceleration structure*/,
-		  1} });
-
-	return rsc.Generate(m_Renderer.GetDevice(), true);
-}
+//ComPtr<ID3D12RootSignature> Application::CreateRayGenSignature2()
+//{
+//
+//	//{
+//	//	{
+//	//		0 /*u0*/, 1 /*1 descriptor */, 0 /*use the implicit register space 0*/,
+//	//			D3D12_DESCRIPTOR_RANGE_TYPE_UAV /* UAV representing the output buffer*/,
+//	//			0 /*heap slot where the UAV is defined*/
+//	//	},
+//	//		{ 0 /*t0*/, 1, 0,
+//	//		 D3D12_DESCRIPTOR_RANGE_TYPE_SRV /*Top-level acceleration structure*/,
+//	//		 1 }
+//	//});
+//	nv_helpers_dx12::RootSignatureGenerator rsc;
+//	rsc.AddHeapRangesParameter(
+//		{
+//			{0, 1, 0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 0 },
+//			{0, 1, 0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV , 1},
+//			{0, 1, 0, D3D12_DESCRIPTOR_RANGE_TYPE_CBV , 2}
+//		});
+//
+//	return rsc.Generate(m_Renderer.GetDevice(), true);
+//}
 
 void Application::CreateRayGenSignature(ID3D12Device11* device)
 {
-	D3D12_DESCRIPTOR_RANGE ranges[2] = {};
+	D3D12_DESCRIPTOR_RANGE ranges[3] = {};
 
 	ranges[0].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_UAV;
 	ranges[0].NumDescriptors = 1;
@@ -492,27 +508,28 @@ void Application::CreateRayGenSignature(ID3D12Device11* device)
 	ranges[0].OffsetInDescriptorsFromTableStart = 0;
 
 	ranges[1].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
-	ranges[1].NumDescriptors = 1;
+	ranges[1].NumDescriptors = 2;
 	ranges[1].BaseShaderRegister = 0;
 	ranges[1].RegisterSpace = 0;
 	ranges[1].OffsetInDescriptorsFromTableStart = 1;
 
+	//ranges[2].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_CBV;
+	//ranges[2].NumDescriptors = 1;
+	//ranges[2].BaseShaderRegister = 0;
+	//ranges[2].RegisterSpace = 0;
+	//ranges[2].OffsetInDescriptorsFromTableStart = 2;
 
-	D3D12_ROOT_PARAMETER parameters[2] = {};
+
+	D3D12_ROOT_PARAMETER parameters[1] = {};
 
 	parameters[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
-	parameters[0].DescriptorTable.NumDescriptorRanges = 1;
-	parameters[0].DescriptorTable.pDescriptorRanges = &ranges[0];
+	parameters[0].DescriptorTable.NumDescriptorRanges = 2;
+	parameters[0].DescriptorTable.pDescriptorRanges = ranges;
 	parameters[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
-
-	parameters[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
-	parameters[1].DescriptorTable.NumDescriptorRanges = 1;
-	parameters[1].DescriptorTable.pDescriptorRanges = &ranges[1];
-	parameters[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
 
 	// Specify the root signature with its set of parameters
 	D3D12_ROOT_SIGNATURE_DESC rootDesc = {};
-	rootDesc.NumParameters = 2;
+	rootDesc.NumParameters = 1;
 	rootDesc.pParameters = parameters;
 	rootDesc.Flags = D3D12_ROOT_SIGNATURE_FLAG_LOCAL_ROOT_SIGNATURE;
 
@@ -573,7 +590,8 @@ void Application::CreateRaytracingPipeline(ID3D12Device11* device)
 
 	// To be used, each DX12 shader needs a root signature defining which 
 	// parameters and buffers will be accessed. 
-	m_rayGenSignature = CreateRayGenSignature2();
+	//m_rayGenSignature = CreateRayGenSignature2();
+	CreateRayGenSignature(device);
 	m_missSignature = CreateHitSignature(device);
 	m_hitSignature = CreateMissSignature(device);
 
@@ -717,7 +735,6 @@ void Application::CreateRaytracingPipeline(ID3D12Device11* device)
 	subobjects[14].pDesc = &pipelineConfig;
 
 
-
 	// Describe the ray tracing pipeline state object
 	D3D12_STATE_OBJECT_DESC pipelineDesc = {};
 	pipelineDesc.Type = D3D12_STATE_OBJECT_TYPE_RAYTRACING_PIPELINE;
@@ -787,11 +804,6 @@ void Application::CreateRootSignatures(ID3D12Device11* device)
 	}
 }
 
-//-----------------------------------------------------------------------------
-//
-// Allocate the buffer holding the raytracing output, with the same size as the
-// output image
-//
 void Application::CreateRaytracingOutputBuffer()
 {
 	ID3D12Device11* device = m_Renderer.GetDevice();
@@ -820,26 +832,6 @@ void Application::CreateRaytracingOutputBuffer()
 	D3D12_CPU_DESCRIPTOR_HANDLE srvHandle = m_Renderer.m_DescriptorHeap.GetCPUHandle(0);
 	device->CreateUnorderedAccessView(m_outputResource.Get(), nullptr, &uavDesc, srvHandle);
 }
-
-//-----------------------------------------------------------------------------
-//
-// Create the main heap used by the shaders, which will give access to the
-// raytracing output and the top-level acceleration structure
-//
-//void Application::CreateShaderResourceHeap(ID3D12Device11* device, DescriptorHeap* descriptorHeap)
-//{
-//	//descriptorHeap->Create(device, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 2, D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE);
-//
-//
-//
-//	D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
-//	srvDesc.Format = DXGI_FORMAT_UNKNOWN;
-//	srvDesc.ViewDimension = D3D12_SRV_DIMENSION_RAYTRACING_ACCELERATION_STRUCTURE;
-//	srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-//	srvDesc.RaytracingAccelerationStructure.Location = TLASResult->GetGPUVirtualAddress();
-//	D3D12_CPU_DESCRIPTOR_HANDLE srvHandle = descriptorHeap->GetCPUHandle(1);
-//	device->CreateShaderResourceView(nullptr, &srvDesc, srvHandle);
-//}
 
 void Application::CreateShaderBindingTable(ID3D12Device11* device, DescriptorHeap* descriptorHeap)
 {
@@ -872,8 +864,6 @@ void Application::CreateShaderBindingTable(ID3D12Device11* device, DescriptorHea
 	void* Source = nullptr;
 	{
 		void* DestinationStart = nullptr;
-		//const void* Source = vertices;
-		//const UINT Size = sizeof(vertices);
 		const D3D12_RANGE readRange = { 0, 0 };
 		ThrowIfFailed(m_ShaderBindingTable->Map(0, &readRange, &DestinationStart));
 		void* Destination = DestinationStart;
@@ -889,12 +879,6 @@ void Application::CreateShaderBindingTable(ID3D12Device11* device, DescriptorHea
 			memcpy(Destination, &data, sizeof(data));
 			Destination = (UINT8*)Destination + sizeof(data);
 		}
-		{
-			D3D12_GPU_DESCRIPTOR_HANDLE descriptorhandle = m_Renderer.m_DescriptorHeap.GetGPUHandle(1);
-			UINT64 data = (UINT64)descriptorhandle.ptr;
-			memcpy(Destination, &data, sizeof(data));
-			Destination = (UINT8*)Destination + sizeof(data);
-		}
 
 		Source = missShaderIdentifier;
 		Destination = (UINT8*)DestinationStart + 64ULL;
@@ -903,7 +887,6 @@ void Application::CreateShaderBindingTable(ID3D12Device11* device, DescriptorHea
 		Source = hitGroupShaderIdentifier;
 		Destination = (UINT8*)DestinationStart + 64ULL * 2;
 		memcpy(Destination, Source, shaderIdentifierSize);
-
 
 		m_ShaderBindingTable->Unmap(0, nullptr);
 	}

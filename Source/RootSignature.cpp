@@ -1,5 +1,6 @@
 #include "PCH.h"
 #include "RootSignature.h"
+#include "DX12Utility.h"
 
 RootSignature::RootSignature() : m_Device(nullptr), m_Version {}, m_RootSignatureFlags {}
 {}

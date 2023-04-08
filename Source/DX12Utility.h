@@ -3,6 +3,14 @@
 
 using Microsoft::WRL::ComPtr;
 
+inline void ThrowIfFailed(HRESULT hr)
+{
+	if (FAILED(hr))
+	{
+		throw std::exception();
+	}
+}
+
 inline void EnableDX12DebugLayer()
 {
 #if defined(_DEBUG)
