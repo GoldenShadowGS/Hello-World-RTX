@@ -11,7 +11,7 @@ using Microsoft::WRL::ComPtr;
 
 // Local Static functions
 
-inline ComPtr<ID3D12Device11> CreateDevice(const ComPtr<IDXGIAdapter4>& adapter)
+ComPtr<ID3D12Device11> CreateDevice(const ComPtr<IDXGIAdapter4>& adapter)
 {
 	ComPtr<ID3D12Device11> d3d12Device;
 	ThrowIfFailed(D3D12CreateDevice(adapter.Get(), D3D_FEATURE_LEVEL_12_2, IID_PPV_ARGS(&d3d12Device)));
@@ -42,7 +42,7 @@ inline ComPtr<ID3D12Device11> CreateDevice(const ComPtr<IDXGIAdapter4>& adapter)
 	return d3d12Device;
 }
 
-inline ComPtr<ID3D12CommandAllocator> CreateCommandAllocator(const ComPtr<ID3D12Device11>& device, D3D12_COMMAND_LIST_TYPE type)
+ComPtr<ID3D12CommandAllocator> CreateCommandAllocator(const ComPtr<ID3D12Device11>& device, D3D12_COMMAND_LIST_TYPE type)
 {
 	ComPtr<ID3D12CommandAllocator> commandAllocator;
 	ThrowIfFailed(device->CreateCommandAllocator(type, IID_PPV_ARGS(&commandAllocator)));
@@ -50,7 +50,7 @@ inline ComPtr<ID3D12CommandAllocator> CreateCommandAllocator(const ComPtr<ID3D12
 	return commandAllocator;
 }
 
-inline ComPtr<ID3D12GraphicsCommandList6> CreateCommandList(const ComPtr<ID3D12Device11>& device,
+ComPtr<ID3D12GraphicsCommandList6> CreateCommandList(const ComPtr<ID3D12Device11>& device,
 	const ComPtr<ID3D12CommandAllocator>& commandAllocator, const ComPtr<ID3D12PipelineState>& pipelineState, D3D12_COMMAND_LIST_TYPE type)
 {
 	ComPtr<ID3D12GraphicsCommandList6> commandList;
@@ -61,32 +61,6 @@ inline ComPtr<ID3D12GraphicsCommandList6> CreateCommandList(const ComPtr<ID3D12D
 //----------------------------------------
 // Renderer
 //----------------------------------------
-
-void Renderer::StartNextFrame()
-{
-	ThrowIfFailed(m_CommandAllocator.Get()->Reset());
-	ThrowIfFailed(m_CommandList->Reset(m_CommandAllocator.Get(), nullptr));
-
-	m_SwapChain.TransitionBackBuffer(m_CommandList.Get(), D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_COPY_DEST);
-
-	//m_CommandList->SetGraphicsRootSignature(m_RootSignature.Get());
-	//ID3D12DescriptorHeap* heaps = { m_DescriptorHeap.GetHeap() };
-
-	//m_CommandList->SetDescriptorHeaps(1, &heaps);
-	//m_CommandList->SetGraphicsRootDescriptorTable(0, m_DescriptorHeap.GetGPUHandle(0));
-	//TransitionResource(m_CommandList.Get(), m_SwapChain.GetBackBuffer(), D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET);
-	//m_SwapChain.Clear(m_CommandList.Get());
-}
-
-void Renderer::Present()
-{
-	m_SwapChain.TransitionBackBuffer(m_CommandList.Get(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_PRESENT);
-	//TransitionResource(m_CommandList.Get(), m_SwapChain.GetBackBuffer(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT);
-	ThrowIfFailed(m_CommandList->Close());
-	m_CommandQueue.ExecuteCommandList(m_CommandList.Get());
-	m_SwapChain.Present();
-	m_CommandQueue.Flush();
-}
 
 void Renderer::ExecuteCommandList()
 {
@@ -133,19 +107,15 @@ void Renderer::Create(Window* window)
 
 	m_CommandQueue.Create(m_Device.Get(), D3D12_COMMAND_LIST_TYPE_DIRECT);
 
-	m_SwapChain.Create(m_Device.Get(), window, &m_CommandQueue, 2, TRUE);
-
-	//m_RootSignature.Create(m_Device.Get());
-	//BuildRootSignature();
-	//BuildPipeLineState();
+	m_SwapChain.Create(m_Device.Get(), window, &m_CommandQueue, 3, TRUE);
 
 	m_DescriptorHeap.Create(m_Device.Get(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 10, D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE);
 
 	m_CommandAllocator = CreateCommandAllocator(m_Device, D3D12_COMMAND_LIST_TYPE_DIRECT);
 	m_CommandList = CreateCommandList(m_Device, m_CommandAllocator, nullptr, D3D12_COMMAND_LIST_TYPE_DIRECT);
 
-	constexpr UINT64 UploadHeapSize = 1024ULL * 1024 * 500;
-	constexpr UINT64 DefaultHeapSize = 1024ULL * 1024 * 500;
-	constexpr UINT64 ConstantBufferHeapSize = 1024ULL * 1024 * 8;
+	constexpr UINT64 UploadHeapSize = 1024ULL * 1024 * 20;
+	constexpr UINT64 DefaultHeapSize = 1024ULL * 1024 * 20;
+	constexpr UINT64 ConstantBufferHeapSize = 1024ULL * 1024 * 1;
 	m_Heap.Create(m_Device.Get(), UploadHeapSize, DefaultHeapSize, ConstantBufferHeapSize);
 }

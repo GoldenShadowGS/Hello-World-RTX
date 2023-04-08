@@ -2,8 +2,6 @@
 #include "Application.h"
 #include "Input.h"
 #include "DX12Utility.h"
-#include "RaytracingPipelineGenerator.h"
-#include "RootSignatureGenerator.h"
 
 #define WINDOWTITLE L"Hello World RTX"
 #define FULLSCREENMODE false
@@ -47,6 +45,7 @@ int Application::Run()
 void Application::Resize()
 {
 	m_Window.ResizedWindow();
+	m_Camera.SetAspectRatio((float)m_Window.GetClientWidth() / m_Window.GetClientHeight());
 	if (m_Renderer.m_SwapChain.Resize())
 	{
 		CreateRaytracingOutputBuffer();
@@ -77,7 +76,7 @@ void Application::Render()
 
 	commandList->SetDescriptorHeaps(1, m_Renderer.GetDescriptorHeap()->GetAddressOfHeap());
 
-	commandList->SetComputeRootSignature(m_GlobalRootSignature.Get());
+	//commandList->SetComputeRootSignature(m_GlobalRootSignature.Get());
 
 	D3D12_DISPATCH_RAYS_DESC DispatchDesc = {};
 
@@ -193,19 +192,10 @@ void Application::OnInit()
 
 void Application::BuildAssets(ID3D12Device11* device, ID3D12GraphicsCommandList6* commandList)
 {
-	// Data
-	//Vertex vertices[] =
-	//{
-	//	{ -0.5f, -0.5f, 0.0f },
-	//	{ 0.5f, -0.5f, 0.0f },
-	//	{ 0.0f, 0.5f, 0.0f }
-	//};
-
 	Vertex vertices[] =
 	{ {0.25,0.25,0.25},{0.25,-0.25,0.25},{0.25,0.25,-0.25},{0.25,-0.25,-0.25},{-0.25,0.25,0.25},{-0.25,-0.25,0.25},{-0.25,0.25,-0.25},{-0.25,-0.25,-0.25} };
 
 	UINT indices[] = { 2,4,0,7,2,3,5,6,7,7,1,5,3,0,1,1,4,5,6,4,2,6,2,7,4,6,5,3,1,7,2,0,3,0,4,1 };
-	//UINT indices[] = { 0,1,2 };
 
 	using namespace DirectX;
 	XMMATRIX matrix = XMMatrixIdentity();
@@ -288,14 +278,14 @@ void Application::BuildAssets(ID3D12Device11* device, ID3D12GraphicsCommandList6
 		D3D12_RAYTRACING_GEOMETRY_DESC geometry_Desc = {};
 		geometry_Desc.Type = D3D12_RAYTRACING_GEOMETRY_TYPE_TRIANGLES;
 		geometry_Desc.Flags = D3D12_RAYTRACING_GEOMETRY_FLAG_OPAQUE;
-		geometry_Desc.Triangles.Transform3x4 = Matrix->GetGPUVirtualAddress(); // GPU Resource Address
+		geometry_Desc.Triangles.Transform3x4 = Matrix->GetGPUVirtualAddress();
 		geometry_Desc.Triangles.IndexFormat = DXGI_FORMAT_R32_UINT;
 		geometry_Desc.Triangles.VertexFormat = DXGI_FORMAT_R32G32B32_FLOAT;
 		geometry_Desc.Triangles.IndexCount = _countof(indices);
 		geometry_Desc.Triangles.VertexCount = _countof(vertices);
-		geometry_Desc.Triangles.IndexBuffer = IndexBuffer->GetGPUVirtualAddress(); // GPU Resource Address
-		geometry_Desc.Triangles.VertexBuffer.StartAddress = VertexBuffer->GetGPUVirtualAddress(); // GPU Resource Address
-		geometry_Desc.Triangles.VertexBuffer.StrideInBytes = sizeof(Vertex); // GPU Resource Address
+		geometry_Desc.Triangles.IndexBuffer = IndexBuffer->GetGPUVirtualAddress();
+		geometry_Desc.Triangles.VertexBuffer.StartAddress = VertexBuffer->GetGPUVirtualAddress();
+		geometry_Desc.Triangles.VertexBuffer.StrideInBytes = sizeof(Vertex);
 
 		D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS AS_Inputs = {};
 		AS_Inputs.Type = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL;
@@ -411,24 +401,17 @@ void Application::BuildAssets(ID3D12Device11* device, ID3D12GraphicsCommandList6
 		DescriptorResourceDesc.Flags = D3D12_RESOURCE_FLAG_NONE;
 		descriptorsBuffer = m_Renderer.GetHeap()->CreateResource(device, UploadHeap, &DescriptorResourceDesc, D3D12_RESOURCE_STATE_GENERIC_READ);
 
-		//Instance Desc
-		D3D12_RAYTRACING_INSTANCE_DESC instanceDescs = {};
-
+		// TODO experiment with matrix transforms here and in the Bottomlevel
 		// Instance transform matrix
 		DirectX::XMMATRIX m = XMMatrixTranspose(matrix); // GLM is column major, the INSTANCE_DESC is row major
+
+		//Instance Desc
+		D3D12_RAYTRACING_INSTANCE_DESC instanceDescs = {};
 		memcpy(&instanceDescs.Transform, &m, sizeof(instanceDescs.Transform));
-
-		// Instance ID visible in the shader in InstanceID()
-		instanceDescs.InstanceID = 0;
-
-		// Visibility mask, always visible here
-		instanceDescs.InstanceMask = 0xFF;
-
-		// Index of the hit group invoked upon intersection
-		instanceDescs.InstanceContributionToHitGroupIndex = 0;
-
+		instanceDescs.InstanceID = 0; // Instance ID visible in the shader in InstanceID()
+		instanceDescs.InstanceMask = 0xFF; // Visibility mask, always visible here
+		instanceDescs.InstanceContributionToHitGroupIndex = 0; // Index of the hit group invoked upon intersection
 		instanceDescs.Flags = D3D12_RAYTRACING_INSTANCE_FLAG_NONE;
-
 		instanceDescs.AccelerationStructure = BLASResult->GetGPUVirtualAddress();
 
 		//Copy the instance Desc into the resource
@@ -472,31 +455,6 @@ void Application::BuildAssets(ID3D12Device11* device, ID3D12GraphicsCommandList6
 // The ray generation shader needs to access 2 resources: the raytracing output
 // and the top-level acceleration structure
 //
-
-//ComPtr<ID3D12RootSignature> Application::CreateRayGenSignature2()
-//{
-//
-//	//{
-//	//	{
-//	//		0 /*u0*/, 1 /*1 descriptor */, 0 /*use the implicit register space 0*/,
-//	//			D3D12_DESCRIPTOR_RANGE_TYPE_UAV /* UAV representing the output buffer*/,
-//	//			0 /*heap slot where the UAV is defined*/
-//	//	},
-//	//		{ 0 /*t0*/, 1, 0,
-//	//		 D3D12_DESCRIPTOR_RANGE_TYPE_SRV /*Top-level acceleration structure*/,
-//	//		 1 }
-//	//});
-//	nv_helpers_dx12::RootSignatureGenerator rsc;
-//	rsc.AddHeapRangesParameter(
-//		{
-//			{0, 1, 0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 0 },
-//			{0, 1, 0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV , 1},
-//			{0, 1, 0, D3D12_DESCRIPTOR_RANGE_TYPE_CBV , 2}
-//		});
-//
-//	return rsc.Generate(m_Renderer.GetDevice(), true);
-//}
-
 void Application::CreateRayGenSignature(ID3D12Device11* device)
 {
 	D3D12_DESCRIPTOR_RANGE ranges[3] = {};
@@ -513,13 +471,6 @@ void Application::CreateRayGenSignature(ID3D12Device11* device)
 	ranges[1].RegisterSpace = 0;
 	ranges[1].OffsetInDescriptorsFromTableStart = 1;
 
-	//ranges[2].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_CBV;
-	//ranges[2].NumDescriptors = 1;
-	//ranges[2].BaseShaderRegister = 0;
-	//ranges[2].RegisterSpace = 0;
-	//ranges[2].OffsetInDescriptorsFromTableStart = 2;
-
-
 	D3D12_ROOT_PARAMETER parameters[1] = {};
 
 	parameters[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
@@ -527,45 +478,50 @@ void Application::CreateRayGenSignature(ID3D12Device11* device)
 	parameters[0].DescriptorTable.pDescriptorRanges = ranges;
 	parameters[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
 
-	// Specify the root signature with its set of parameters
 	D3D12_ROOT_SIGNATURE_DESC rootDesc = {};
 	rootDesc.NumParameters = 1;
 	rootDesc.pParameters = parameters;
 	rootDesc.Flags = D3D12_ROOT_SIGNATURE_FLAG_LOCAL_ROOT_SIGNATURE;
 
-	// Create the root signature from its descriptor
 	ID3DBlob* pSigBlob;
 	ID3DBlob* pErrorBlob;
 	HRESULT hr = D3D12SerializeRootSignature(&rootDesc, D3D_ROOT_SIGNATURE_VERSION_1_0, &pSigBlob,
 		&pErrorBlob);
 
-
 	ThrowIfFailed(device->CreateRootSignature(0, pSigBlob->GetBufferPointer(), pSigBlob->GetBufferSize(),
 		IID_PPV_ARGS(&m_rayGenSignature)));
 }
 
-//-----------------------------------------------------------------------------
-// The hit shader communicates only through the ray payload, and therefore does
-// not require any resources
-//
-ComPtr<ID3D12RootSignature> Application::CreateHitSignature(ID3D12Device11* device)
+void Application::CreateHitSignature(ID3D12Device11* device)
 {
-	//nv_helpers_dx12::RootSignatureGenerator rsc;
-	//return rsc.Generate(device, true);
+	D3D12_ROOT_SIGNATURE_DESC rootDesc = {};
+	rootDesc.NumParameters = 0;
+	rootDesc.pParameters = nullptr;
+	rootDesc.Flags = D3D12_ROOT_SIGNATURE_FLAG_LOCAL_ROOT_SIGNATURE;
 
-	nv_helpers_dx12::RootSignatureGenerator rsc;
-	rsc.AddRootParameter(D3D12_ROOT_PARAMETER_TYPE_SRV);
-	return rsc.Generate(device, true);
+	ID3DBlob* pSigBlob;
+	ID3DBlob* pErrorBlob;
+	HRESULT hr = D3D12SerializeRootSignature(&rootDesc, D3D_ROOT_SIGNATURE_VERSION_1_0, &pSigBlob,
+		&pErrorBlob);
+
+	ThrowIfFailed(device->CreateRootSignature(0, pSigBlob->GetBufferPointer(), pSigBlob->GetBufferSize(),
+		IID_PPV_ARGS(&m_hitSignature)));
 }
 
-//-----------------------------------------------------------------------------
-// The miss shader communicates only through the ray payload, and therefore
-// does not require any resources
-//
-ComPtr<ID3D12RootSignature> Application::CreateMissSignature(ID3D12Device11* device)
+void Application::CreateMissSignature(ID3D12Device11* device)
 {
-	nv_helpers_dx12::RootSignatureGenerator rsc;
-	return rsc.Generate(device, true);
+	D3D12_ROOT_SIGNATURE_DESC rootDesc = {};
+	rootDesc.NumParameters = 0;
+	rootDesc.pParameters = nullptr;
+	rootDesc.Flags = D3D12_ROOT_SIGNATURE_FLAG_LOCAL_ROOT_SIGNATURE;
+
+	ID3DBlob* pSigBlob;
+	ID3DBlob* pErrorBlob;
+	HRESULT hr = D3D12SerializeRootSignature(&rootDesc, D3D_ROOT_SIGNATURE_VERSION_1_0, &pSigBlob,
+		&pErrorBlob);
+
+	ThrowIfFailed(device->CreateRootSignature(0, pSigBlob->GetBufferPointer(), pSigBlob->GetBufferSize(),
+		IID_PPV_ARGS(&m_hitSignature)));
 }
 
 //-----------------------------------------------------------------------------
@@ -577,23 +533,13 @@ ComPtr<ID3D12RootSignature> Application::CreateMissSignature(ID3D12Device11* dev
 //
 void Application::CreateRaytracingPipeline(ID3D12Device11* device)
 {
-	nv_helpers_dx12::RayTracingPipelineGenerator pipeline(device);
-	// The pipeline contains the DXIL code of all the shaders potentially executed 
-	// during the raytracing process. This section compiles the HLSL code into a 
-	// set of DXIL libraries. We chose to separate the code in several libraries 
-	// by semantic (ray generation, hit, miss) for clarity. Any code layout can be 
-	// used. 
 	m_rayGenLibrary = CompileShaderLibrary(L"Shaders/RayGen.hlsl");
 	m_missLibrary = CompileShaderLibrary(L"Shaders/Miss.hlsl");
 	m_hitLibrary = CompileShaderLibrary(L"Shaders/Hit.hlsl");
 
-
-	// To be used, each DX12 shader needs a root signature defining which 
-	// parameters and buffers will be accessed. 
-	//m_rayGenSignature = CreateRayGenSignature2();
 	CreateRayGenSignature(device);
-	m_missSignature = CreateHitSignature(device);
-	m_hitSignature = CreateMissSignature(device);
+	CreateMissSignature(device);
+	CreateHitSignature(device);
 
 	CreateRootSignatures(device);
 
@@ -611,11 +557,6 @@ void Application::CreateRaytracingPipeline(ID3D12Device11* device)
 	// (eg. Miss and ShadowMiss). Note that the hit shaders are now only referred 
 	// to as hit groups, meaning that the underlying intersection, any-hit and 
 	// closest-hit shaders share the same root signature. 
-
-	//const WCHAR* RayGenName = L"RayGen";
-	//const WCHAR* MissName = L"Miss";
-	//const WCHAR* ClosestHitName = L"ClosestHit";
-	//const WCHAR* HitGroupName = L"HitGroup";
 
 	const WCHAR* exports[3] = { RayGenName, MissName, ClosestHitName };
 
@@ -756,6 +697,7 @@ void Application::CreateRaytracingPipeline(ID3D12Device11* device)
 
 void Application::CreateRootSignatures(ID3D12Device11* device)
 {
+	//TODO rewrite this
 	// Creation of the global root signature
 	D3D12_ROOT_SIGNATURE_DESC rootDesc = {};
 	rootDesc.NumParameters = 0;

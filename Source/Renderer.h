@@ -14,8 +14,6 @@ public:
 	Renderer();
 	~Renderer();
 	void Create(Window* m_Window);
-	void StartNextFrame();
-	void Present();
 	void ExecuteCommandList();
 	inline void ToggleVSync() { SetVSync(!GetVSync()); }
 	inline void SetVSync(bool vsync) { m_SwapChain.m_VSync = vsync; }
@@ -24,11 +22,7 @@ public:
 	inline ID3D12GraphicsCommandList6* GetCommandList() { return m_CommandList.Get(); }
 	inline DescriptorHeap* GetDescriptorHeap() { return &m_DescriptorHeap; }
 	inline HeapManager* GetHeap() { return &m_Heap; }
-	//inline void SetScissor() { m_SwapChain.SetViewPortScissorRect(m_CommandList.Get()); }
-	//inline SwapChain* GetSwapChain() { return &m_SwapChain; }
 private:
-	//void BuildRootSignature();
-	//void BuildPipeLineState();
 #ifdef _DEBUG
 	//Gets Destructed Last Because it was created First
 	class DebugWrapper

@@ -16,7 +16,9 @@ using namespace DirectX;
 Camera::Camera() :
 	m_CameraBuffer { 0.0f, 0.25f, -1.0f, 1.0f },
 	m_Heading(0.0f),
-	m_Pitch(0.0f)
+	m_Pitch(0.0f),
+	m_FOV(1.0f),
+	m_AspectRatio(1.0f)
 {}
 
 void Camera::CreateResource(ID3D12Device11* device, DescriptorHeap* descriptorHeap)
@@ -41,7 +43,7 @@ void Camera::CreateResource(ID3D12Device11* device, DescriptorHeap* descriptorHe
 
 	D3D12_CONSTANT_BUFFER_VIEW_DESC cbDesc = {};
 	cbDesc.BufferLocation = m_ConstantBuffer->GetGPUVirtualAddress();
-	cbDesc.SizeInBytes = resDesc.Width;
+	cbDesc.SizeInBytes = (UINT)resDesc.Width;
 	D3D12_CPU_DESCRIPTOR_HANDLE cbHandle = descriptorHeap->GetCPUHandle(2);
 	device->CreateConstantBufferView(&cbDesc, cbHandle);
 	Update(0.0f);
@@ -62,8 +64,8 @@ void Camera::Update(float deltaTime)
 
 	XMMATRIX PitchYawMatrix = XMMatrixRotationRollPitchYaw((float)m_Pitch, (float)m_Heading, 0.0f);
 
-	m_CameraBuffer.Forward = XMVector3Transform({ 0.0f, 0.0f, 1.0f, 0.0f }, PitchYawMatrix);
-	m_CameraBuffer.Right = XMVector3Transform({ 1.0f, 0.0f, 0.0f, 0.0f }, PitchYawMatrix);
+	m_CameraBuffer.Forward = XMVector3Transform({ 0.0f, 0.0f, m_FOV, 0.0f }, PitchYawMatrix);
+	m_CameraBuffer.Right = XMVector3Transform({ m_AspectRatio, 0.0f, 0.0f, 0.0f }, PitchYawMatrix);
 	m_CameraBuffer.Up = XMVector3Transform({ 0.0f, -1.0f, 0.0f, 0.0f }, PitchYawMatrix);
 
 	XMVECTOR direction = {};
@@ -95,9 +97,6 @@ void Camera::Update(float deltaTime)
 	direction *= MovementSensitivity * deltaTime;
 	direction = XMVector3Transform(direction, PitchYawMatrix);
 	m_CameraBuffer.CameraPosition += direction;
-	//XMMATRIX ViewMatrix = XMMatrixLookToLH(m_CameraPosition, Forward, Up);
-	//XMMATRIX ProjectionMatrix = XMMatrixPerspectiveFovLH(m_FOV, m_AspectRatio, 0.01f, 25.0f);
-	//XMMATRIX Matrix = ViewMatrix * ProjectionMatrix;
 	Upload();
 }
 

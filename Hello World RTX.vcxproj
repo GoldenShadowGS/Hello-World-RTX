@@ -136,10 +136,6 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="Source\Application.cpp" />
-    <ClCompile Include="Source\BottomLevelASGenerator.cpp">
-      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">NotUsing</PrecompiledHeader>
-      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">NotUsing</PrecompiledHeader>
-    </ClCompile>
     <ClCompile Include="Source\Camera.cpp" />
     <ClCompile Include="Source\CommandQueue.cpp" />
     <ClCompile Include="Source\DescriptorHeap.cpp" />
@@ -150,46 +146,24 @@
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Create</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Create</PrecompiledHeader>
     </ClCompile>
-    <ClCompile Include="Source\RaytracingPipelineGenerator.cpp">
-      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">NotUsing</PrecompiledHeader>
-      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">NotUsing</PrecompiledHeader>
-    </ClCompile>
     <ClCompile Include="Source\Renderer.cpp" />
     <ClCompile Include="Source\RootSignature.cpp" />
-    <ClCompile Include="Source\RootSignatureGenerator.cpp">
-      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">NotUsing</PrecompiledHeader>
-      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">NotUsing</PrecompiledHeader>
-    </ClCompile>
-    <ClCompile Include="Source\ShaderBindingTableGenerator.cpp">
-      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">NotUsing</PrecompiledHeader>
-      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">NotUsing</PrecompiledHeader>
-    </ClCompile>
     <ClCompile Include="Source\SwapChain.cpp" />
-    <ClCompile Include="Source\TopLevelASGenerator.cpp">
-      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">NotUsing</PrecompiledHeader>
-      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">NotUsing</PrecompiledHeader>
-    </ClCompile>
     <ClCompile Include="Source\Window.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Source\Application.h" />
-    <ClInclude Include="Source\BottomLevelASGenerator.h" />
     <ClInclude Include="Source\Camera.h" />
     <ClInclude Include="Source\CommandQueue.h" />
     <ClInclude Include="Source\DescriptorHeap.h" />
-    <ClInclude Include="Source\DXRHelper.h" />
     <ClInclude Include="Source\Heap.h" />
     <ClInclude Include="Source\Input.h" />
     <ClInclude Include="Source\MathUtility.h" />
     <ClInclude Include="Source\PCH.h" />
-    <ClInclude Include="Source\RaytracingPipelineGenerator.h" />
     <ClInclude Include="Source\Renderer.h" />
     <ClInclude Include="Source\RootSignature.h" />
-    <ClInclude Include="Source\RootSignatureGenerator.h" />
-    <ClInclude Include="Source\ShaderBindingTableGenerator.h" />
     <ClInclude Include="Source\SwapChain.h" />
     <ClInclude Include="Source\DX12Utility.h" />
-    <ClInclude Include="Source\TopLevelASGenerator.h" />
     <ClInclude Include="Source\Window.h" />
   </ItemGroup>
   <ItemGroup>
