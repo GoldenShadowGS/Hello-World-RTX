@@ -1,22 +1,20 @@
 #include "Common.hlsl"
 
 // Raytracing output texture, accessed as a UAV
-RWTexture2D< float4 > gOutput : register(u0);
+RWTexture2D< float4 > Output : register(u0);
 
 // Raytracing acceleration structure, accessed as a SRV
-RaytracingAccelerationStructure SceneBVH : register(t0);
+RaytracingAccelerationStructure Scene : register(t0);
 
 struct Camera
 {
 	float4 position;
-	float4 direction;
+	float4 forward;
 	float4 right;
 	float4 up;
 };
 
 StructuredBuffer<Camera> cam : register (t1, space0);
-
-float4 GLobalLight = normalize(float4(1,1,1,0));
 
 [shader("raygeneration")]
 void RayGen()
@@ -36,12 +34,12 @@ void RayGen()
 	ray.Origin = cam[0].position.xyz;
 	float3 up = cam[0].up.xyz * d.y;
 	float3 right = cam[0].right.xyz * d.x;
-	ray.Direction = normalize(cam[0].direction.xyz + up + right);
+	ray.Direction = normalize(cam[0].forward.xyz + up + right);
 	ray.TMin = 0;
 	ray.TMax = 100000;
 
 	// Trace the ray
-	TraceRay(SceneBVH, RAY_FLAG_NONE, 0xFF, 0, 0, 0, ray, payload);
+	TraceRay(Scene, RAY_FLAG_NONE, 0xFF, 0, 0, 0, ray, payload);
 
-	gOutput[launchIndex] = float4(payload.colorAndDistance.rgb, 1.f);
+	Output[launchIndex] = float4(payload.colorAndDistance.rgb, 1.f);
 }

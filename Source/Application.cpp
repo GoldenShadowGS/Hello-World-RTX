@@ -2,6 +2,7 @@
 #include "Application.h"
 #include "Input.h"
 #include "DX12Utility.h"
+#include "RootSignatureGenerator.h"
 
 #define WINDOWTITLE L"Hello World RTX"
 #define FULLSCREENMODE false
@@ -21,11 +22,17 @@ Application::~Application()
 int Application::Run()
 {
 	m_TitleBuffer = new WCHAR[TITLE_BUFFER_SIZE];  //TODO Temporary to show stats in title bar
-	m_Window.Create(m_hInstance, this, WINDOWTITLE, 1200, 800, FULLSCREENMODE, &Application::WindProcInit);
-	if (!m_Window.GetHandle())
-		return 1;
-	m_Renderer.Create(&m_Window);
-	OnInit();
+	try
+	{
+		m_Window.Create(m_hInstance, this, WINDOWTITLE, 1200, 800, FULLSCREENMODE, &Application::WindProcInit);
+		m_Renderer.Create(&m_Window);
+		OnInit();
+	}
+	catch (const std::exception& e)
+	{
+		MessageBoxA(nullptr, e.what(), "Exception", MB_OK);
+		return -1;
+	}
 	m_Window.Show();
 	InitializeInput();
 
@@ -40,6 +47,7 @@ int Application::Run()
 		}
 	}
 	return 0;
+
 }
 
 void Application::Resize()
@@ -164,7 +172,7 @@ void Application::UpdateFrameTime()
 
 void Application::SetTitle() const
 {
-	swprintf_s(m_TitleBuffer, TITLE_BUFFER_SIZE, L"%s Width:%d Height:%d FPS:%f Size: %zd\n", WINDOWTITLE, m_Window.GetClientWidth(), m_Window.GetClientHeight(), GetFPS(), sizeof(Application));
+	swprintf_s(m_TitleBuffer, TITLE_BUFFER_SIZE, L"%s Width:%d Height:%d FPS:%f\n", WINDOWTITLE, m_Window.GetClientWidth(), m_Window.GetClientHeight(), GetFPS());
 	SetWindowTextW(m_Window.GetHandle(), m_TitleBuffer);
 }
 
@@ -172,6 +180,13 @@ void Application::OnInit()
 {
 	m_Camera.CreateResource(m_Renderer.GetDevice(), &m_Renderer.m_DescriptorHeap);
 	BuildAssets(m_Renderer.GetDevice(), m_Renderer.GetCommandList());
+
+	m_rayGenLibrary = CompileShaderLibrary(L"Shaders/RayGen.hlsl");
+	m_missLibrary = CompileShaderLibrary(L"Shaders/Miss.hlsl");
+	m_hitLibrary = CompileShaderLibrary(L"Shaders/Hit.hlsl");
+
+	CreateRootSignatures(m_Renderer.GetDevice());
+
 	CreateRaytracingPipeline(m_Renderer.GetDevice());
 
 
@@ -451,119 +466,14 @@ void Application::BuildAssets(ID3D12Device11* device, ID3D12GraphicsCommandList6
 	}
 }
 
-//-----------------------------------------------------------------------------
-// The ray generation shader needs to access 2 resources: the raytracing output
-// and the top-level acceleration structure
-//
-void Application::CreateRayGenSignature(ID3D12Device11* device)
-{
-	D3D12_DESCRIPTOR_RANGE ranges[3] = {};
-
-	ranges[0].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_UAV;
-	ranges[0].NumDescriptors = 1;
-	ranges[0].BaseShaderRegister = 0;
-	ranges[0].RegisterSpace = 0;
-	ranges[0].OffsetInDescriptorsFromTableStart = 0;
-
-	ranges[1].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
-	ranges[1].NumDescriptors = 2;
-	ranges[1].BaseShaderRegister = 0;
-	ranges[1].RegisterSpace = 0;
-	ranges[1].OffsetInDescriptorsFromTableStart = 1;
-
-	D3D12_ROOT_PARAMETER parameters[1] = {};
-
-	parameters[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
-	parameters[0].DescriptorTable.NumDescriptorRanges = 2;
-	parameters[0].DescriptorTable.pDescriptorRanges = ranges;
-	parameters[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
-
-	D3D12_ROOT_SIGNATURE_DESC rootDesc = {};
-	rootDesc.NumParameters = 1;
-	rootDesc.pParameters = parameters;
-	rootDesc.Flags = D3D12_ROOT_SIGNATURE_FLAG_LOCAL_ROOT_SIGNATURE;
-
-	ID3DBlob* pSigBlob;
-	ID3DBlob* pErrorBlob;
-	HRESULT hr = D3D12SerializeRootSignature(&rootDesc, D3D_ROOT_SIGNATURE_VERSION_1_0, &pSigBlob,
-		&pErrorBlob);
-
-	ThrowIfFailed(device->CreateRootSignature(0, pSigBlob->GetBufferPointer(), pSigBlob->GetBufferSize(),
-		IID_PPV_ARGS(&m_rayGenSignature)));
-}
-
-void Application::CreateHitSignature(ID3D12Device11* device)
-{
-	D3D12_ROOT_SIGNATURE_DESC rootDesc = {};
-	rootDesc.NumParameters = 0;
-	rootDesc.pParameters = nullptr;
-	rootDesc.Flags = D3D12_ROOT_SIGNATURE_FLAG_LOCAL_ROOT_SIGNATURE;
-
-	ID3DBlob* pSigBlob;
-	ID3DBlob* pErrorBlob;
-	HRESULT hr = D3D12SerializeRootSignature(&rootDesc, D3D_ROOT_SIGNATURE_VERSION_1_0, &pSigBlob,
-		&pErrorBlob);
-
-	ThrowIfFailed(device->CreateRootSignature(0, pSigBlob->GetBufferPointer(), pSigBlob->GetBufferSize(),
-		IID_PPV_ARGS(&m_hitSignature)));
-}
-
-void Application::CreateMissSignature(ID3D12Device11* device)
-{
-	D3D12_ROOT_SIGNATURE_DESC rootDesc = {};
-	rootDesc.NumParameters = 0;
-	rootDesc.pParameters = nullptr;
-	rootDesc.Flags = D3D12_ROOT_SIGNATURE_FLAG_LOCAL_ROOT_SIGNATURE;
-
-	ID3DBlob* pSigBlob;
-	ID3DBlob* pErrorBlob;
-	HRESULT hr = D3D12SerializeRootSignature(&rootDesc, D3D_ROOT_SIGNATURE_VERSION_1_0, &pSigBlob,
-		&pErrorBlob);
-
-	ThrowIfFailed(device->CreateRootSignature(0, pSigBlob->GetBufferPointer(), pSigBlob->GetBufferSize(),
-		IID_PPV_ARGS(&m_hitSignature)));
-}
-
-//-----------------------------------------------------------------------------
-//
-// The raytracing pipeline binds the shader code, root signatures and pipeline
-// characteristics in a single structure used by DXR to invoke the shaders and
-// manage temporary memory during raytracing
-//
-//
 void Application::CreateRaytracingPipeline(ID3D12Device11* device)
 {
-	m_rayGenLibrary = CompileShaderLibrary(L"Shaders/RayGen.hlsl");
-	m_missLibrary = CompileShaderLibrary(L"Shaders/Miss.hlsl");
-	m_hitLibrary = CompileShaderLibrary(L"Shaders/Hit.hlsl");
-
-	CreateRayGenSignature(device);
-	CreateMissSignature(device);
-	CreateHitSignature(device);
-
-	CreateRootSignatures(device);
-
-	// To be used, each shader needs to be associated to its root signature.
-	// A shaders imported from the DXIL libraries needs to be associated with 
-	// exactly one root signature.The shaders comprising the hit groups need 
-	// to share the same root signature, which is associated to the 
-	// hit group(and not to the shaders themselves).Note that a shader 
-	// does not have to actually access all the resources declared in its 
-	// root signature, as long as the root signature defines a superset 
-	// of the resources the shader needs.
-
-	// The following section associates the root signature to each shader. Note 
-	// that we can explicitly show that some shaders share the same root signature 
-	// (eg. Miss and ShadowMiss). Note that the hit shaders are now only referred 
-	// to as hit groups, meaning that the underlying intersection, any-hit and 
-	// closest-hit shaders share the same root signature. 
-
 	const WCHAR* exports[3] = { RayGenName, MissName, ClosestHitName };
 
 	D3D12_EXPORT_DESC exportdesc[3] = {};
-	exportdesc[0].Name = RayGenName;
-	exportdesc[1].Name = MissName;
-	exportdesc[2].Name = ClosestHitName;
+	exportdesc[0].Name = exports[0];
+	exportdesc[1].Name = exports[1];
+	exportdesc[2].Name = exports[2];
 
 	D3D12_DXIL_LIBRARY_DESC lib_Desc[3] = {};
 	lib_Desc[0].DXILLibrary.pShaderBytecode = m_rayGenLibrary->GetBufferPointer();
@@ -697,53 +607,41 @@ void Application::CreateRaytracingPipeline(ID3D12Device11* device)
 
 void Application::CreateRootSignatures(ID3D12Device11* device)
 {
-	//TODO rewrite this
-	// Creation of the global root signature
-	D3D12_ROOT_SIGNATURE_DESC rootDesc = {};
-	rootDesc.NumParameters = 0;
-	rootDesc.pParameters = nullptr;
-	// A global root signature is the default, hence this flag
-	rootDesc.Flags = D3D12_ROOT_SIGNATURE_FLAG_NONE;
+	RootSignatureGenerator globalRootSignatureGenerator(device, D3D12_ROOT_SIGNATURE_FLAG_NONE);
+	m_GlobalRootSignature = globalRootSignatureGenerator.Generate();
 
-	HRESULT hr = 0;
+	RootSignatureGenerator localRootSignatureGenerator(device, D3D12_ROOT_SIGNATURE_FLAG_LOCAL_ROOT_SIGNATURE);
+	m_LocalRootSignature = localRootSignatureGenerator.Generate();
 
-	ID3DBlob* serializedRootSignature;
-	ID3DBlob* error;
+	RootSignatureGenerator RayGenRootSignatureGenerator(device, D3D12_ROOT_SIGNATURE_FLAG_LOCAL_ROOT_SIGNATURE);
 
-	// Create the empty global root signature
-	hr = D3D12SerializeRootSignature(&rootDesc, D3D_ROOT_SIGNATURE_VERSION_1,
-		&serializedRootSignature, &error);
-	if (FAILED(hr))
-	{
-		throw std::logic_error("Could not serialize the global root signature");
-	}
-	hr = device->CreateRootSignature(0, serializedRootSignature->GetBufferPointer(),
-		serializedRootSignature->GetBufferSize(),
-		IID_PPV_ARGS(&m_GlobalRootSignature));
+	D3D12_DESCRIPTOR_RANGE ranges[2] = {};
+	ranges[0].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_UAV;
+	ranges[0].NumDescriptors = 1;
+	ranges[0].BaseShaderRegister = 0;
+	ranges[0].RegisterSpace = 0;
+	ranges[0].OffsetInDescriptorsFromTableStart = 0;
 
-	serializedRootSignature->Release();
-	if (FAILED(hr))
-	{
-		throw std::logic_error("Could not create the global root signature");
-	}
+	ranges[1].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
+	ranges[1].NumDescriptors = 2;
+	ranges[1].BaseShaderRegister = 0;
+	ranges[1].RegisterSpace = 0;
+	ranges[1].OffsetInDescriptorsFromTableStart = 1;
 
-	// Create the local root signature, reusing the same descriptor but altering the creation flag
-	rootDesc.Flags = D3D12_ROOT_SIGNATURE_FLAG_LOCAL_ROOT_SIGNATURE;
-	hr = D3D12SerializeRootSignature(&rootDesc, D3D_ROOT_SIGNATURE_VERSION_1,
-		&serializedRootSignature, &error);
-	if (FAILED(hr))
-	{
-		throw std::logic_error("Could not serialize the local root signature");
-	}
-	hr = device->CreateRootSignature(0, serializedRootSignature->GetBufferPointer(),
-		serializedRootSignature->GetBufferSize(),
-		IID_PPV_ARGS(&m_LocalRootSignature));
+	D3D12_ROOT_PARAMETER parameter = {};
+	parameter.ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+	parameter.DescriptorTable.NumDescriptorRanges = 2;
+	parameter.DescriptorTable.pDescriptorRanges = ranges;
+	parameter.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
 
-	serializedRootSignature->Release();
-	if (FAILED(hr))
-	{
-		throw std::logic_error("Could not create the local root signature");
-	}
+	RayGenRootSignatureGenerator.AddParameter(parameter);
+	m_rayGenSignature = RayGenRootSignatureGenerator.Generate();
+
+	RootSignatureGenerator hitRootSignatureGenerator(device, D3D12_ROOT_SIGNATURE_FLAG_LOCAL_ROOT_SIGNATURE);
+	m_hitSignature = hitRootSignatureGenerator.Generate();
+
+	RootSignatureGenerator missRootSignatureGenerator(device, D3D12_ROOT_SIGNATURE_FLAG_LOCAL_ROOT_SIGNATURE);
+	m_missSignature = missRootSignatureGenerator.Generate();
 }
 
 void Application::CreateRaytracingOutputBuffer()

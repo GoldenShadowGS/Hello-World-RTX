@@ -123,57 +123,6 @@ inline UINT64 Align64(UINT64 uLocation, UINT64 uAlign)
 	return ((uLocation + (uAlign - 1)) & ~(uAlign - 1));
 }
 
-//inline ComPtr<IDxcBlob> CompileShader(
-//	D3D12_SHADER_BYTECODE& ShaderByteCode, 
-//	const WCHAR* filename, 
-//	const WCHAR* entrypoint, 
-//	const WCHAR* targetProfile, 
-//	IDxcIncludeHandler* IncludeHandler,
-//	LPCWSTR* args, 
-//	UINT argCount, 
-//	IDxcLibrary* Library, 
-//	IDxcCompiler* Compiler)
-//{
-//	uint32_t codePage = CP_UTF8;
-//	ComPtr<IDxcBlobEncoding> sourceBlob;
-//	HRESULT hr = Library->CreateBlobFromFile(filename, &codePage, &sourceBlob);
-//	ThrowIfFailed(hr);
-//
-//	ComPtr<IDxcOperationResult> result;
-//	hr = Compiler->Compile(
-//		sourceBlob.Get(),			// pSource
-//		filename,					// pSourceName
-//		entrypoint,					// pEntryPoint
-//		targetProfile,				// pTargetProfile
-//		args, argCount,				// pArguments, argCount
-//		NULL, 0,					// pDefines, defineCount
-//		IncludeHandler,				// pIncludeHandler
-//		&result);					// ppResult
-//	if (SUCCEEDED(hr))
-//		result->GetStatus(&hr);
-//	if (FAILED(hr))
-//	{
-//		if (result)
-//		{
-//			ComPtr<IDxcBlobEncoding> errorsBlob;
-//			hr = result->GetErrorBuffer(&errorsBlob);
-//			if (SUCCEEDED(hr) && errorsBlob)
-//			{
-//				WCHAR Buffer[1024] = {};
-//				swprintf_s(Buffer, 256, L"%s Compilation failed with errors:\n%hs", filename, (const char*)errorsBlob->GetBufferPointer());
-//				OutputDebugStringW(Buffer);
-//			}
-//		}
-//		// TODO Handle compilation error...
-//	}
-//	ComPtr<IDxcBlob> compiledCode;
-//	result->GetResult(&compiledCode);
-//
-//	ShaderByteCode.pShaderBytecode = compiledCode->GetBufferPointer();
-//	ShaderByteCode.BytecodeLength = compiledCode->GetBufferSize();
-//	return compiledCode;
-//}
-
 //--------------------------------------------------------------------------------------------------
 // Compile a HLSL file into a DXIL library
 //
@@ -196,7 +145,9 @@ inline IDxcBlob* CompileShaderLibrary(LPCWSTR fileName)
 	std::ifstream shaderFile(fileName);
 	if (shaderFile.good() == false)
 	{
-		throw std::logic_error("Cannot find shader file");
+		CStringA errmsg = "Cannot find shader file: ";
+		errmsg.Append(CStringA(fileName));
+		throw std::logic_error(errmsg);
 	}
 	std::stringstream strStream;
 	strStream << shaderFile.rdbuf();
@@ -223,7 +174,6 @@ inline IDxcBlob* CompileShaderLibrary(LPCWSTR fileName)
 		{
 			throw std::logic_error("Failed to get shader compiler error");
 		}
-
 		// Convert error blob to a string
 		std::vector<char> infoLog(pError->GetBufferSize() + 1);
 		memcpy(infoLog.data(), pError->GetBufferPointer(), pError->GetBufferSize());
@@ -232,9 +182,30 @@ inline IDxcBlob* CompileShaderLibrary(LPCWSTR fileName)
 		std::string errorMsg = "Shader Compiler Error:\n";
 		errorMsg.append(infoLog.data());
 
-		MessageBoxA(nullptr, errorMsg.c_str(), "Error!", MB_OK);
-		throw std::logic_error("Failed compile shader");
+		throw std::logic_error(errorMsg.c_str());
 	}
+#ifdef _DEBUG
+	{
+		IDxcBlobEncoding* pError;
+		hr = pResult->GetErrorBuffer(&pError);
+		if (FAILED(hr))
+		{
+			throw std::logic_error("Failed to get shader compiler error");
+		}
+		if (pError->GetBufferSize())
+		{
+			// Convert error blob to a string
+			std::vector<char> infoLog(pError->GetBufferSize() + 1);
+			memcpy(infoLog.data(), pError->GetBufferPointer(), pError->GetBufferSize());
+			infoLog[pError->GetBufferSize()] = 0;
+
+			std::string errorMsg = "\n";
+			errorMsg.append(infoLog.data());
+
+			OutputDebugStringA(errorMsg.c_str());
+		}
+	}
+#endif
 
 	IDxcBlob* pBlob;
 	ThrowIfFailed(pResult->GetResult(&pBlob));

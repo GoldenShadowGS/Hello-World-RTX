@@ -108,6 +108,7 @@
       <ConformanceMode>true</ConformanceMode>
       <PrecompiledHeader>Use</PrecompiledHeader>
       <PrecompiledHeaderFile>PCH.h</PrecompiledHeaderFile>
+      <LanguageStandard>stdcpp20</LanguageStandard>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -125,6 +126,7 @@
       <ConformanceMode>true</ConformanceMode>
       <PrecompiledHeader>Use</PrecompiledHeader>
       <PrecompiledHeaderFile>PCH.h</PrecompiledHeaderFile>
+      <LanguageStandard>stdcpp20</LanguageStandard>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -147,7 +149,7 @@
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Create</PrecompiledHeader>
     </ClCompile>
     <ClCompile Include="Source\Renderer.cpp" />
-    <ClCompile Include="Source\RootSignature.cpp" />
+    <ClCompile Include="Source\RootSignatureGenerator.cpp" />
     <ClCompile Include="Source\SwapChain.cpp" />
     <ClCompile Include="Source\Window.cpp" />
   </ItemGroup>
@@ -161,7 +163,7 @@
     <ClInclude Include="Source\MathUtility.h" />
     <ClInclude Include="Source\PCH.h" />
     <ClInclude Include="Source\Renderer.h" />
-    <ClInclude Include="Source\RootSignature.h" />
+    <ClInclude Include="Source\RootSignatureGenerator.h" />
     <ClInclude Include="Source\SwapChain.h" />
     <ClInclude Include="Source\DX12Utility.h" />
     <ClInclude Include="Source\Window.h" />

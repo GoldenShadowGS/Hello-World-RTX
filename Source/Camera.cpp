@@ -14,7 +14,7 @@
 using namespace DirectX;
 
 Camera::Camera() :
-	m_CameraBuffer { 0.0f, 0.25f, -1.0f, 1.0f },
+	m_CameraBuffer { -1.0f, 0.0f, 0.0f, 1.0f },
 	m_Heading(0.0f),
 	m_Pitch(0.0f),
 	m_FOV(1.0f),
@@ -29,7 +29,7 @@ void Camera::CreateResource(ID3D12Device11* device, DescriptorHeap* descriptorHe
 	D3D12_RESOURCE_DESC resDesc = {};
 	resDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
 	resDesc.Alignment = 0;
-	resDesc.Width = Align(sizeof(XMFLOAT4) * 4,256);
+	resDesc.Width = Align(sizeof(XMFLOAT4) * 4, 256);
 	resDesc.Height = 1;
 	resDesc.DepthOrArraySize = 1;
 	resDesc.MipLevels = 1;
@@ -62,40 +62,39 @@ void Camera::Update(float deltaTime)
 		m_Pitch = clamp(m_Pitch + Input::GetMouseYDelta() * MouseSensitivity, MinPitch, MaxPitch);
 	}
 
-	XMMATRIX PitchYawMatrix = XMMatrixRotationRollPitchYaw((float)m_Pitch, (float)m_Heading, 0.0f);
-
-	m_CameraBuffer.Forward = XMVector3Transform({ 0.0f, 0.0f, m_FOV, 0.0f }, PitchYawMatrix);
-	m_CameraBuffer.Right = XMVector3Transform({ m_AspectRatio, 0.0f, 0.0f, 0.0f }, PitchYawMatrix);
-	m_CameraBuffer.Up = XMVector3Transform({ 0.0f, -1.0f, 0.0f, 0.0f }, PitchYawMatrix);
+	XMMATRIX cameraLookMatrix = XMMatrixRotationY(m_Pitch) * XMMatrixRotationZ(m_Heading);
+	m_CameraBuffer.Forward = XMVector3Transform({ 1.0f, 0.0, 0.0f, 0.0f }, cameraLookMatrix);
+	m_CameraBuffer.Right = XMVector3Transform({ 0.0f, m_AspectRatio, 0.0f, 0.0f }, cameraLookMatrix);
+	m_CameraBuffer.Up = XMVector3Transform({ 0.0f, 0.0f, -1.0f, 0.0f }, cameraLookMatrix);
 
 	XMVECTOR direction = {};
 	if (Input::GetKeyState('W'))
 	{
-		direction += { 0.0f, 0.0f, 1.0f, 0.0f };
+		direction += { 1.0f, 0.0f, 0.0f, 0.0f };
 	}
 	if (Input::GetKeyState('S'))
 	{
-		direction += { 0.0f, 0.0f, -1.0f, 0.0f };
+		direction += { -1.0f, 0.0f, 0.0f, 0.0f };
 	}
 	if (Input::GetKeyState('A'))
 	{
-		direction += { -1.0f, 0.0f, 0.0f, 0.0f };
+		direction += { 0.0f, -1.0f, 0.0f, 0.0f };
 	}
 	if (Input::GetKeyState('D'))
 	{
-		direction += { 1.0f, 0.0f, 0.0f, 0.0f };
+		direction += { 0.0f, 1.0f, 0.0f, 0.0f };
 	}
 	if (Input::GetKeyState('E'))
 	{
-		direction += { 0.0f, 1.0f, 0.0f, 0.0f };
+		direction += { 0.0f, 0.0f, 1.0f, 0.0f };
 	}
 	if (Input::GetKeyState('Q'))
 	{
-		direction += { 0.0f, -1.0f, 0.0f, 0.0f };
+		direction += { 0.0f, 0.0f, -1.0f, 0.0f };
 	}
 	float MovementSensitivity = 2.0f;
 	direction *= MovementSensitivity * deltaTime;
-	direction = XMVector3Transform(direction, PitchYawMatrix);
+	direction = XMVector3Transform(direction, cameraLookMatrix);
 	m_CameraBuffer.CameraPosition += direction;
 	Upload();
 }

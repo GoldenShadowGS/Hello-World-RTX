@@ -48,10 +48,6 @@ private:
 	Microsoft::WRL::ComPtr<ID3D12Resource2> descriptorsBuffer;
 
 	// #DXR
-	void CreateRayGenSignature(ID3D12Device11* device);
-	//Microsoft::WRL::ComPtr<ID3D12RootSignature> CreateRayGenSignature2();
-	void CreateMissSignature(ID3D12Device11* device);
-	void CreateHitSignature(ID3D12Device11* device);
 	void CreateRaytracingPipeline(ID3D12Device11* device);
 	Microsoft::WRL::ComPtr<IDxcBlob> m_rayGenLibrary;
 	Microsoft::WRL::ComPtr<IDxcBlob> m_hitLibrary;

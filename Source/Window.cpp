@@ -57,6 +57,10 @@ void Window::Create(HINSTANCE hInstance, Application* ptrApp, std::wstring title
 	const int Width = m_WinRect.right - m_WinRect.left;
 	const int Height = m_WinRect.bottom - m_WinRect.top;
 	m_hWin = CreateWindowExW(0, WINDOWCLASSNAME, title.c_str(), WINDOWED_STYLE, m_WinRect.left, m_WinRect.top, Width, Height, nullptr, nullptr, m_Instance, ptrApp);
+	if (!m_hWin)
+	{
+		throw std::exception("Could not Create Window");
+	}
 	ResizedWindow();
 	if (fullscreen)
 	{

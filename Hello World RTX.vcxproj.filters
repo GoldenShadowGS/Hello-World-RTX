@@ -54,7 +54,7 @@
     <ClCompile Include="Source\DescriptorHeap.cpp">
       <Filter>Source Files\Renderer</Filter>
     </ClCompile>
-    <ClCompile Include="Source\RootSignature.cpp">
+    <ClCompile Include="Source\RootSignatureGenerator.cpp">
       <Filter>Source Files\Renderer</Filter>
     </ClCompile>
     <ClCompile Include="Source\Heap.cpp">
@@ -92,7 +92,7 @@
     <ClInclude Include="Source\DX12Utility.h">
       <Filter>Header Files\Renderer</Filter>
     </ClInclude>
-    <ClInclude Include="Source\RootSignature.h">
+    <ClInclude Include="Source\RootSignatureGenerator.h">
       <Filter>Header Files\Renderer</Filter>
     </ClInclude>
     <ClInclude Include="Source\Heap.h">

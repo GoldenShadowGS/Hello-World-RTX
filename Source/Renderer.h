@@ -3,7 +3,6 @@
 #include "SwapChain.h"
 #include "CommandQueue.h"
 #include "DescriptorHeap.h"
-#include "RootSignature.h"
 #include "Heap.h"
 
 class Window;
