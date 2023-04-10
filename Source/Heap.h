@@ -4,8 +4,9 @@
 enum HeapType
 {
 	UploadHeap = 0,
-	DefaultHeap = 1,
-	ConstantBufferHeap = 2
+	ScratchUploadHeap = 1,
+	DefaultHeap = 2,
+	ScratchDefaultHeap = 3
 };
 
 class HeapManager
@@ -22,9 +23,10 @@ class HeapManager
 		Microsoft::WRL::ComPtr<ID3D12Heap> m_Heap;
 	};
 public:
-	void Create(ID3D12Device11* device, UINT64 uploadheapsize, UINT64 defaultheapsize, UINT64 constantbufferheapsize);
+	void Create(ID3D12Device11* device, UINT64 uploadHeapSize, UINT64 scratchUploadHeapSize, UINT64 defaultHeapSize, UINT64 scratchDefaultHeapSize);
 	Microsoft::WRL::ComPtr<ID3D12Resource2> CreateResource(ID3D12Device11* device, HeapType type, D3D12_RESOURCE_DESC* desc, D3D12_RESOURCE_STATES state, D3D12_CLEAR_VALUE* clearvalue = nullptr);
-	void ResetUploadHeap();
+	Microsoft::WRL::ComPtr<ID3D12Resource2> CreateBufferResource(ID3D12Device11* device, HeapType type, D3D12_RESOURCE_STATES state, UINT64 heapsize, D3D12_RESOURCE_FLAGS flags = D3D12_RESOURCE_FLAG_NONE);
+	void ResetHeap(HeapType type, UINT index);
 private:
-	SingleHeap m_Heaps[3];
+	SingleHeap m_Heaps[4];
 };

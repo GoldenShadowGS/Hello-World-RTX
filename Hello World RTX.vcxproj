@@ -137,6 +137,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="Source\AccelerationStructures.cpp" />
     <ClCompile Include="Source\Application.cpp" />
     <ClCompile Include="Source\Camera.cpp" />
     <ClCompile Include="Source\CommandQueue.cpp" />
@@ -161,11 +162,13 @@
     <ClInclude Include="Source\Heap.h" />
     <ClInclude Include="Source\Input.h" />
     <ClInclude Include="Source\MathUtility.h" />
+    <ClInclude Include="Source\MeshData.h" />
     <ClInclude Include="Source\PCH.h" />
     <ClInclude Include="Source\Renderer.h" />
     <ClInclude Include="Source\RootSignatureGenerator.h" />
     <ClInclude Include="Source\SwapChain.h" />
     <ClInclude Include="Source\DX12Utility.h" />
+    <ClInclude Include="Source\AccelerationStructures.h" />
     <ClInclude Include="Source\Window.h" />
   </ItemGroup>
   <ItemGroup>

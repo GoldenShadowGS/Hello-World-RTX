@@ -287,7 +287,6 @@ void Application::BuildAssets(ID3D12Device11* device, ID3D12GraphicsCommandList6
 		memcpy(Destination, Source, Size);
 		Matrix->Unmap(0, nullptr);
 	}
-
 	// Bottom Level Acceleration Structure
 	{
 		D3D12_RAYTRACING_GEOMETRY_DESC geometry_Desc = {};

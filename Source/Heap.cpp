@@ -32,15 +32,21 @@ ComPtr<ID3D12Resource2> HeapManager::SingleHeap::CreateResource(ID3D12Device11* 
 
 void HeapManager::SingleHeap::Reset()
 {
-	m_Heap.Reset();
+	m_CurrentOffset = 0;
 }
 
-void HeapManager::Create(ID3D12Device11* device, UINT64 uploadheapsize, UINT64 defaultheapsize, UINT64 constantbufferheapsize)
+void HeapManager::Create(
+	ID3D12Device11* device, 
+	UINT64 uploadHeapSize, 
+	UINT64 scratchUploadHeapSize, 
+	UINT64 defaultHeapSize, 
+	UINT64 scratchDefaultHeapSize)
 {
 
-	m_Heaps[0].Create(device, D3D12_HEAP_TYPE_UPLOAD, uploadheapsize);
-	m_Heaps[1].Create(device, D3D12_HEAP_TYPE_DEFAULT, defaultheapsize);
-	m_Heaps[2].Create(device, D3D12_HEAP_TYPE_UPLOAD, constantbufferheapsize);
+	m_Heaps[0].Create(device, D3D12_HEAP_TYPE_UPLOAD, uploadHeapSize);
+	m_Heaps[1].Create(device, D3D12_HEAP_TYPE_UPLOAD, scratchUploadHeapSize);
+	m_Heaps[2].Create(device, D3D12_HEAP_TYPE_DEFAULT, defaultHeapSize);
+	m_Heaps[3].Create(device, D3D12_HEAP_TYPE_DEFAULT, scratchDefaultHeapSize);
 
 }
 
@@ -49,7 +55,25 @@ ComPtr<ID3D12Resource2> HeapManager::CreateResource(ID3D12Device11* device, Heap
 	return m_Heaps[type].CreateResource(device, desc, state, clearvalue);
 }
 
-void HeapManager::ResetUploadHeap()
+ComPtr<ID3D12Resource2> HeapManager::CreateBufferResource(ID3D12Device11* device, HeapType type, D3D12_RESOURCE_STATES state, UINT64 heapsize, D3D12_RESOURCE_FLAGS flags)
 {
-	m_Heaps[UploadHeap].Reset();
+	D3D12_RESOURCE_DESC ResourceDesc = {};
+	ResourceDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+	ResourceDesc.Alignment = 0;
+	ResourceDesc.Width = heapsize;
+	ResourceDesc.Height = 1;
+	ResourceDesc.DepthOrArraySize = 1;
+	ResourceDesc.MipLevels = 1;
+	ResourceDesc.Format = DXGI_FORMAT_UNKNOWN;
+	ResourceDesc.SampleDesc.Count = 1;
+	ResourceDesc.SampleDesc.Quality = 0;
+	ResourceDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+	ResourceDesc.Flags = flags;
+	return CreateResource(device, type, &ResourceDesc, state);
+}
+
+// TODO make this generic
+void HeapManager::ResetHeap(HeapType type, UINT index)
+{
+	m_Heaps[type].Reset();
 }

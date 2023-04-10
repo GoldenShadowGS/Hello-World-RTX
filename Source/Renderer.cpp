@@ -102,9 +102,10 @@ void Renderer::Create(Window* window)
 	m_CommandList = CreateCommandList(m_Device.Get(), m_CommandAllocator.Get(), D3D12_COMMAND_LIST_TYPE_DIRECT);
 
 	constexpr UINT64 UploadHeapSize = 1024ULL * 1024 * 20;
+	constexpr UINT64 ScratchUploadHeapSize = 1024ULL * 1024 * 20;
 	constexpr UINT64 DefaultHeapSize = 1024ULL * 1024 * 20;
-	constexpr UINT64 ConstantBufferHeapSize = 1024ULL * 1024 * 1;
-	m_Heap.Create(m_Device.Get(), UploadHeapSize, DefaultHeapSize, ConstantBufferHeapSize);
+	constexpr UINT64 ScratchDefaultHeapSize = 1024ULL * 1024 * 20;
+	m_Heap.Create(m_Device.Get(), UploadHeapSize, ScratchUploadHeapSize, DefaultHeapSize, ScratchDefaultHeapSize);
 }
 
 void Renderer::ExecuteCommandList()

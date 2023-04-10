@@ -99,6 +99,15 @@ inline void CheckRaytracingSupport(ID3D12Device11* device)
 		throw std::runtime_error("Raytracing not supported on device"); // TODO error message?
 }
 
+inline void CopyDataToUploadResource(const void* source, ID3D12Resource2* resource, size_t size)
+{
+	void* Destination = nullptr;
+	const D3D12_RANGE readRange = { 0, 0 };
+	ThrowIfFailed(resource->Map(0, &readRange, &Destination));
+	memcpy(Destination, source, size);
+	resource->Unmap(0, nullptr);
+}
+
 inline void TransitionResource(ID3D12GraphicsCommandList6* commandList, ID3D12Resource2* resource, D3D12_RESOURCE_STATES beforeState, D3D12_RESOURCE_STATES afterState)
 {
 	D3D12_RESOURCE_BARRIER barrier = {};
