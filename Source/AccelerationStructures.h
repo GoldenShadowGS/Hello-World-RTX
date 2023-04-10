@@ -5,36 +5,43 @@
 struct MeshData;
 class HeapManager;
 
+D3D12_RAYTRACING_INSTANCE_DESC CreateInstance(ID3D12Resource2* blas, DirectX::XMMATRIX* transform, UINT id, UINT hitGroupIndex);
+
+enum BLASIdentifier
+{
+	Cube_ID = 0
+};
+
+class SceneAccelerationStructure
+{
+	std::map<BLASIdentifier, Microsoft::WRL::ComPtr<ID3D12Resource2>> BLAS;
+	Microsoft::WRL::ComPtr<ID3D12Resource2> TLAS;
+};
+
 class TLAS_Generator
 {
 public:
 	TLAS_Generator(ID3D12Device11* device, HeapManager* heap);
-	void AddBLAS(ID3D12Resource2* blas, DirectX::XMMATRIX* matrix);
-	Microsoft::WRL::ComPtr<ID3D12Resource2> Generate(ID3D12GraphicsCommandList6* commandList);
+	// TODO id and hitGroupIndex need to be ENUMS
+	void AddInstance(const D3D12_RAYTRACING_INSTANCE_DESC& instanceDesc);
+	void Generate(ID3D12GraphicsCommandList6* commandList, Microsoft::WRL::ComPtr<ID3D12Resource2>& resultTlas);
 private:
-	Microsoft::WRL::ComPtr<ID3D12Resource2> m_Scratch;		// Scratch memory for AS builder 
-	Microsoft::WRL::ComPtr<ID3D12Resource2> m_Result;		// Where the AS is 
+	Microsoft::WRL::ComPtr<ID3D12Resource2> m_Scratch;
 	Microsoft::WRL::ComPtr<ID3D12Resource2> m_DescriptorsBuffer;
 	ID3D12Device11* m_Device;
 	HeapManager* m_Heap;
-	struct BLAS_Ptr_and_Transform
-	{
-		ID3D12Resource2* blas;
-		DirectX::XMMATRIX* matrix;
-	};
-	std::vector<BLAS_Ptr_and_Transform> BLASs;
+	std::vector<D3D12_RAYTRACING_INSTANCE_DESC> m_InstanceDesc;
 };
 
 class BLAS_Generator
 {
 public:
 	BLAS_Generator(ID3D12Device11* device, HeapManager* heap, MeshData* meshdata);
-	Microsoft::WRL::ComPtr<ID3D12Resource2> Generate(ID3D12GraphicsCommandList6* commandList);
+	void Generate(ID3D12GraphicsCommandList6* commandList, Microsoft::WRL::ComPtr<ID3D12Resource2>& resultBlas);
 private:
-	Microsoft::WRL::ComPtr<ID3D12Resource2> m_VertexBuffer;	// Holds the Vertices
-	Microsoft::WRL::ComPtr<ID3D12Resource2> m_IndexBuffer;	// Holds the indices
-	Microsoft::WRL::ComPtr<ID3D12Resource2> m_Scratch;		// Scratch memory for AS builder 
-	Microsoft::WRL::ComPtr<ID3D12Resource2> m_Result;		// Where the AS is 
+	Microsoft::WRL::ComPtr<ID3D12Resource2> m_VertexBuffer;
+	Microsoft::WRL::ComPtr<ID3D12Resource2> m_IndexBuffer;
+	Microsoft::WRL::ComPtr<ID3D12Resource2> m_Scratch;
 	ID3D12Device11* m_Device;
 	HeapManager* m_Heap;
 	UINT m_IndexCount;

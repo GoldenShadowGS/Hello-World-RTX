@@ -3,10 +3,14 @@
 #include "Input.h"
 #include "DX12Utility.h"
 #include "RootSignatureGenerator.h"
+#include "AccelerationStructures.h"
+#include "Heap.h"
 
 #define WINDOWTITLE L"Hello World RTX"
 #define FULLSCREENMODE false
 #define TITLE_BUFFER_SIZE 256
+
+using namespace DirectX;
 
 Application* Application::AppPtr = nullptr;
 
@@ -62,7 +66,32 @@ void Application::Resize()
 
 void Application::Update()
 {
+	ID3D12Device11* device = m_Renderer.GetDevice();
+	HeapManager* heapManager = m_Renderer.GetHeap();
+	ID3D12CommandAllocator* commandAllocator = m_Renderer.m_CommandAllocator.Get();
+	ID3D12GraphicsCommandList6* commandList = m_Renderer.GetCommandList();
+
+	ThrowIfFailed(commandAllocator->Reset());
+	ThrowIfFailed(commandList->Reset(commandAllocator, nullptr));
+
 	UpdateFrameTime();
+	heapManager->ResetHeapOffset(ScratchDefaultHeap);
+	heapManager->ResetHeapOffset(ScratchUploadHeap);
+
+	//x += m_FrameTime * 0.1f;
+	y += m_FrameTime * 0.1f;
+	//XMMATRIX matrix = XMMatrixTranslation(x, y, 0);
+
+	//m_Renderer.GetHeap()->ResetHeapOffset(TLASHeap);
+	//m_Renderer.GetHeap()->ResetHeapOffset(ScratchDefaultHeap);
+	//m_Renderer.GetHeap()->ResetHeapOffset(ScratchUploadHeap);
+	//TLAS_Generator tlas(device, m_Renderer.GetHeap());
+	//tlas.AddBLAS(BLAS.Get(), &matrix);
+	//TLAS.Reset();
+	//TLAS = tlas.Generate(commandList);
+
+	BuildTLAS(device, commandList, heapManager);
+
 	SetTitle();
 	Input::Update();
 	m_Camera.Update(m_FrameTime);
@@ -73,8 +102,8 @@ void Application::Render()
 	ID3D12CommandAllocator* commandAllocator = m_Renderer.m_CommandAllocator.Get();
 	ID3D12GraphicsCommandList6* commandList = m_Renderer.GetCommandList();
 
-	ThrowIfFailed(commandAllocator->Reset());
-	ThrowIfFailed(commandList->Reset(commandAllocator, nullptr));
+	//ThrowIfFailed(commandAllocator->Reset());
+	//ThrowIfFailed(commandList->Reset(commandAllocator, nullptr));
 
 	m_Renderer.m_SwapChain.TransitionBackBuffer(commandList, D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_COPY_DEST);
 
@@ -196,7 +225,7 @@ void Application::OnInit()
 	srvDesc.Format = DXGI_FORMAT_UNKNOWN;
 	srvDesc.ViewDimension = D3D12_SRV_DIMENSION_RAYTRACING_ACCELERATION_STRUCTURE;
 	srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-	srvDesc.RaytracingAccelerationStructure.Location = TLASResult->GetGPUVirtualAddress();
+	srvDesc.RaytracingAccelerationStructure.Location = TLAS->GetGPUVirtualAddress();
 	D3D12_CPU_DESCRIPTOR_HANDLE srvHandle = m_Renderer.m_DescriptorHeap.GetCPUHandle(1);
 	m_Renderer.GetDevice()->CreateShaderResourceView(nullptr, &srvDesc, srvHandle);
 
@@ -207,262 +236,31 @@ void Application::OnInit()
 
 void Application::BuildAssets(ID3D12Device11* device, ID3D12GraphicsCommandList6* commandList)
 {
-	Vertex vertices[] =
+	std::vector<Vertex> vertices =
 	{ {0.25,0.25,0.25},{0.25,-0.25,0.25},{0.25,0.25,-0.25},{0.25,-0.25,-0.25},{-0.25,0.25,0.25},{-0.25,-0.25,0.25},{-0.25,0.25,-0.25},{-0.25,-0.25,-0.25} };
+	std::vector<UINT> indices = { 2,4,0,7,2,3,5,6,7,7,1,5,3,0,1,1,4,5,6,4,2,6,2,7,4,6,5,3,1,7,2,0,3,0,4,1 };
+	MeshData cube = { vertices, indices, sizeof(Vertex) };
 
-	UINT indices[] = { 2,4,0,7,2,3,5,6,7,7,1,5,3,0,1,1,4,5,6,4,2,6,2,7,4,6,5,3,1,7,2,0,3,0,4,1 };
+	BLAS_Generator blas1(device, m_Renderer.GetHeap(), &cube);
+	blas1.Generate(commandList, BLAS);
 
-	using namespace DirectX;
-	XMMATRIX matrix = XMMatrixIdentity();
+	BuildTLAS(device, commandList, m_Renderer.GetHeap());
+}
 
-	// UploadHeap Resources
-	// Vertex Buffer Resource
-	D3D12_RESOURCE_DESC VertexResourceDesc = {};
-	VertexResourceDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
-	VertexResourceDesc.Alignment = 0;
-	VertexResourceDesc.Width = sizeof(vertices);
-	VertexResourceDesc.Height = 1;
-	VertexResourceDesc.DepthOrArraySize = 1;
-	VertexResourceDesc.MipLevels = 1;
-	VertexResourceDesc.Format = DXGI_FORMAT_UNKNOWN;
-	VertexResourceDesc.SampleDesc.Count = 1;
-	VertexResourceDesc.SampleDesc.Quality = 0;
-	VertexResourceDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
-	VertexResourceDesc.Flags = D3D12_RESOURCE_FLAG_NONE;
-	VertexBuffer = m_Renderer.GetHeap()->CreateResource(device, UploadHeap, &VertexResourceDesc, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER);
-	{
-		void* Destination = nullptr;
-		const void* Source = vertices;
-		const UINT Size = sizeof(vertices);
-		const D3D12_RANGE readRange = { 0, 0 };
-		ThrowIfFailed(VertexBuffer->Map(0, &readRange, &Destination));
-		memcpy(Destination, Source, Size);
-		VertexBuffer->Unmap(0, nullptr);
-	}
+void Application::BuildTLAS(ID3D12Device11* device, ID3D12GraphicsCommandList6* commandList, HeapManager* heap)
+{
+	heap->ResetHeapOffset(TLASHeap);
 
-	// Index Buffer Resource
-	D3D12_RESOURCE_DESC IndexResourceDesc = {};
-	IndexResourceDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
-	IndexResourceDesc.Alignment = 0;
-	IndexResourceDesc.Width = sizeof(indices);
-	IndexResourceDesc.Height = 1;
-	IndexResourceDesc.DepthOrArraySize = 1;
-	IndexResourceDesc.MipLevels = 1;
-	IndexResourceDesc.Format = DXGI_FORMAT_UNKNOWN;
-	IndexResourceDesc.SampleDesc.Count = 1;
-	IndexResourceDesc.SampleDesc.Quality = 0;
-	IndexResourceDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
-	IndexResourceDesc.Flags = D3D12_RESOURCE_FLAG_NONE;
-	IndexBuffer = m_Renderer.GetHeap()->CreateResource(device, UploadHeap, &IndexResourceDesc, D3D12_RESOURCE_STATE_INDEX_BUFFER);
-	{
-		void* Destination = nullptr;
-		const void* Source = indices;
-		const UINT Size = sizeof(indices);
-		const D3D12_RANGE readRange = { 0, 0 };
-		ThrowIfFailed(IndexBuffer->Map(0, &readRange, &Destination));
-		memcpy(Destination, Source, Size);
-		IndexBuffer->Unmap(0, nullptr);
-	}
+	XMMATRIX matrix1 = XMMatrixTranslation(x, y, 0);
+	XMMATRIX matrix2 = XMMatrixTranslation(x + 1.0f, y + 1.0f, 0);
+	TLAS_Generator tlas(device, heap);
 
-	// Matrix Resource
-	D3D12_RESOURCE_DESC MatrixResourceDesc = {};
-	MatrixResourceDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
-	MatrixResourceDesc.Alignment = 0;
-	MatrixResourceDesc.Width = sizeof(XMMATRIX);
-	MatrixResourceDesc.Height = 1;
-	MatrixResourceDesc.DepthOrArraySize = 1;
-	MatrixResourceDesc.MipLevels = 1;
-	MatrixResourceDesc.Format = DXGI_FORMAT_UNKNOWN;
-	MatrixResourceDesc.SampleDesc.Count = 1;
-	MatrixResourceDesc.SampleDesc.Quality = 0;
-	MatrixResourceDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
-	MatrixResourceDesc.Flags = D3D12_RESOURCE_FLAG_NONE;
-	Matrix = m_Renderer.GetHeap()->CreateResource(device, UploadHeap, &MatrixResourceDesc, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER);
-	{
-		void* Destination = nullptr;
-		const void* Source = &matrix;
-		const UINT Size = sizeof(XMMATRIX);
-		const D3D12_RANGE readRange = { 0, 0 };
-		ThrowIfFailed(Matrix->Map(0, &readRange, &Destination));
-		memcpy(Destination, Source, Size);
-		Matrix->Unmap(0, nullptr);
-	}
-	// Bottom Level Acceleration Structure
-	{
-		D3D12_RAYTRACING_GEOMETRY_DESC geometry_Desc = {};
-		geometry_Desc.Type = D3D12_RAYTRACING_GEOMETRY_TYPE_TRIANGLES;
-		geometry_Desc.Flags = D3D12_RAYTRACING_GEOMETRY_FLAG_OPAQUE;
-		geometry_Desc.Triangles.Transform3x4 = Matrix->GetGPUVirtualAddress();
-		geometry_Desc.Triangles.IndexFormat = DXGI_FORMAT_R32_UINT;
-		geometry_Desc.Triangles.VertexFormat = DXGI_FORMAT_R32G32B32_FLOAT;
-		geometry_Desc.Triangles.IndexCount = _countof(indices);
-		geometry_Desc.Triangles.VertexCount = _countof(vertices);
-		geometry_Desc.Triangles.IndexBuffer = IndexBuffer->GetGPUVirtualAddress();
-		geometry_Desc.Triangles.VertexBuffer.StartAddress = VertexBuffer->GetGPUVirtualAddress();
-		geometry_Desc.Triangles.VertexBuffer.StrideInBytes = sizeof(Vertex);
+	D3D12_RAYTRACING_INSTANCE_DESC instance1 = CreateInstance(BLAS.Get(), &matrix1, 0, 0);
+	D3D12_RAYTRACING_INSTANCE_DESC instance2 = CreateInstance(BLAS.Get(), &matrix2, 0, 0);
 
-		D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS AS_Inputs = {};
-		AS_Inputs.Type = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL;
-		AS_Inputs.Flags = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_TRACE;
-		AS_Inputs.NumDescs = 1;
-		AS_Inputs.DescsLayout = D3D12_ELEMENTS_LAYOUT_ARRAY;
-		AS_Inputs.pGeometryDescs = &geometry_Desc;
-
-		D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO prebuild_info = {};
-
-		device->GetRaytracingAccelerationStructurePrebuildInfo(&AS_Inputs, &prebuild_info);
-
-		UINT64 scratchSize = Align64(prebuild_info.ScratchDataSizeInBytes, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT);
-		UINT64 resultSize = Align64(prebuild_info.ResultDataMaxSizeInBytes, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT);
-
-		D3D12_RESOURCE_DESC ScratchResourceDesc = {};
-		ScratchResourceDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
-		ScratchResourceDesc.Alignment = 0;
-		ScratchResourceDesc.Width = scratchSize;
-		ScratchResourceDesc.Height = 1;
-		ScratchResourceDesc.DepthOrArraySize = 1;
-		ScratchResourceDesc.MipLevels = 1;
-		ScratchResourceDesc.Format = DXGI_FORMAT_UNKNOWN;
-		ScratchResourceDesc.SampleDesc.Count = 1;
-		ScratchResourceDesc.SampleDesc.Quality = 0;
-		ScratchResourceDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
-		ScratchResourceDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
-		BLScratch = m_Renderer.GetHeap()->CreateResource(device, DefaultHeap, &ScratchResourceDesc, D3D12_RESOURCE_STATE_COMMON);
-
-		D3D12_RESOURCE_DESC ResultResourceDesc = {};
-		ResultResourceDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
-		ResultResourceDesc.Alignment = 0;
-		ResultResourceDesc.Width = resultSize;
-		ResultResourceDesc.Height = 1;
-		ResultResourceDesc.DepthOrArraySize = 1;
-		ResultResourceDesc.MipLevels = 1;
-		ResultResourceDesc.Format = DXGI_FORMAT_UNKNOWN;
-		ResultResourceDesc.SampleDesc.Count = 1;
-		ResultResourceDesc.SampleDesc.Quality = 0;
-		ResultResourceDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
-		ResultResourceDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
-		BLASResult = m_Renderer.GetHeap()->CreateResource(device, DefaultHeap, &ResultResourceDesc, D3D12_RESOURCE_STATE_RAYTRACING_ACCELERATION_STRUCTURE);
-
-		D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC AS_BuildDesc = {};
-		AS_BuildDesc.DestAccelerationStructureData = BLASResult->GetGPUVirtualAddress(); // GPU Resource Address
-		AS_BuildDesc.Inputs = AS_Inputs;
-		AS_BuildDesc.SourceAccelerationStructureData = 0; // GPU Resource Address
-		AS_BuildDesc.ScratchAccelerationStructureData = BLScratch->GetGPUVirtualAddress(); // GPU Resource Address
-
-		commandList->BuildRaytracingAccelerationStructure(&AS_BuildDesc, 0, nullptr);
-
-		D3D12_RESOURCE_BARRIER uavBarrier = {};
-		uavBarrier.Type = D3D12_RESOURCE_BARRIER_TYPE_UAV;
-		uavBarrier.UAV.pResource = BLASResult.Get();
-		uavBarrier.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
-		commandList->ResourceBarrier(1, &uavBarrier);
-	}
-	// Top Level Acceleration Structure
-	{
-		D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS prebuildDesc = {};
-		prebuildDesc.Type = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL;
-		prebuildDesc.DescsLayout = D3D12_ELEMENTS_LAYOUT_ARRAY;
-		prebuildDesc.NumDescs = 1;
-		prebuildDesc.Flags = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_TRACE;
-
-		D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO prebuild_info = {};
-
-		device->GetRaytracingAccelerationStructurePrebuildInfo(&prebuildDesc, &prebuild_info);
-
-		UINT64 scratchSize = Align64(prebuild_info.ScratchDataSizeInBytes, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT);
-		UINT64 resultSize = Align64(prebuild_info.ResultDataMaxSizeInBytes, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT);
-		UINT64 instanceDescsSize = Align64(sizeof(D3D12_RAYTRACING_INSTANCE_DESC), D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT);
-
-		D3D12_RESOURCE_DESC ScratchResourceDesc = {};
-		ScratchResourceDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
-		ScratchResourceDesc.Alignment = 0;
-		ScratchResourceDesc.Width = scratchSize;
-		ScratchResourceDesc.Height = 1;
-		ScratchResourceDesc.DepthOrArraySize = 1;
-		ScratchResourceDesc.MipLevels = 1;
-		ScratchResourceDesc.Format = DXGI_FORMAT_UNKNOWN;
-		ScratchResourceDesc.SampleDesc.Count = 1;
-		ScratchResourceDesc.SampleDesc.Quality = 0;
-		ScratchResourceDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
-		ScratchResourceDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
-		TLScratch = m_Renderer.GetHeap()->CreateResource(device, DefaultHeap, &ScratchResourceDesc, D3D12_RESOURCE_STATE_COMMON);
-
-		D3D12_RESOURCE_DESC ResultResourceDesc = {};
-		ResultResourceDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
-		ResultResourceDesc.Alignment = 0;
-		ResultResourceDesc.Width = resultSize;
-		ResultResourceDesc.Height = 1;
-		ResultResourceDesc.DepthOrArraySize = 1;
-		ResultResourceDesc.MipLevels = 1;
-		ResultResourceDesc.Format = DXGI_FORMAT_UNKNOWN;
-		ResultResourceDesc.SampleDesc.Count = 1;
-		ResultResourceDesc.SampleDesc.Quality = 0;
-		ResultResourceDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
-		ResultResourceDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
-		TLASResult = m_Renderer.GetHeap()->CreateResource(device, DefaultHeap, &ResultResourceDesc, D3D12_RESOURCE_STATE_RAYTRACING_ACCELERATION_STRUCTURE);
-
-		D3D12_RESOURCE_DESC DescriptorResourceDesc = {};
-		DescriptorResourceDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
-		DescriptorResourceDesc.Alignment = 0;
-		DescriptorResourceDesc.Width = instanceDescsSize;
-		DescriptorResourceDesc.Height = 1;
-		DescriptorResourceDesc.DepthOrArraySize = 1;
-		DescriptorResourceDesc.MipLevels = 1;
-		DescriptorResourceDesc.Format = DXGI_FORMAT_UNKNOWN;
-		DescriptorResourceDesc.SampleDesc.Count = 1;
-		DescriptorResourceDesc.SampleDesc.Quality = 0;
-		DescriptorResourceDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
-		DescriptorResourceDesc.Flags = D3D12_RESOURCE_FLAG_NONE;
-		descriptorsBuffer = m_Renderer.GetHeap()->CreateResource(device, UploadHeap, &DescriptorResourceDesc, D3D12_RESOURCE_STATE_GENERIC_READ);
-
-		// TODO experiment with matrix transforms here and in the Bottomlevel
-		// Instance transform matrix
-		DirectX::XMMATRIX m = XMMatrixTranspose(matrix); // GLM is column major, the INSTANCE_DESC is row major
-
-		//Instance Desc
-		D3D12_RAYTRACING_INSTANCE_DESC instanceDescs = {};
-		memcpy(&instanceDescs.Transform, &m, sizeof(instanceDescs.Transform));
-		instanceDescs.InstanceID = 0; // Instance ID visible in the shader in InstanceID()
-		instanceDescs.InstanceMask = 0xFF; // Visibility mask, always visible here
-		instanceDescs.InstanceContributionToHitGroupIndex = 0; // Index of the hit group invoked upon intersection
-		instanceDescs.Flags = D3D12_RAYTRACING_INSTANCE_FLAG_NONE;
-		instanceDescs.AccelerationStructure = BLASResult->GetGPUVirtualAddress();
-
-		//Copy the instance Desc into the resource
-		{
-			void* Destination = nullptr;
-			const void* Source = &instanceDescs;
-			const UINT Size = sizeof(D3D12_RAYTRACING_INSTANCE_DESC);
-			const D3D12_RANGE readRange = { 0, 0 };
-			ThrowIfFailed(descriptorsBuffer->Map(0, &readRange, &Destination));
-			memcpy(Destination, Source, Size);
-			descriptorsBuffer->Unmap(0, nullptr);
-		}
-
-		// Create a descriptor of the requested builder work, to generate a top-level AS from the input parameters
-		D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC buildDesc = {};
-		buildDesc.DestAccelerationStructureData = { TLASResult->GetGPUVirtualAddress() };
-		buildDesc.Inputs.Type = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL;
-		buildDesc.Inputs.Flags = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_TRACE;
-		buildDesc.Inputs.NumDescs = 1;
-		buildDesc.Inputs.DescsLayout = D3D12_ELEMENTS_LAYOUT_ARRAY;
-		buildDesc.Inputs.InstanceDescs = descriptorsBuffer->GetGPUVirtualAddress();
-		buildDesc.ScratchAccelerationStructureData = TLScratch->GetGPUVirtualAddress();
-		buildDesc.SourceAccelerationStructureData = 0;
-
-		// Build the top-level AS
-		commandList->BuildRaytracingAccelerationStructure(&buildDesc, 0, nullptr);
-
-		// Wait for the builder to complete by setting a barrier on the resulting
-		// buffer. This can be important in case the rendering is triggered
-		// immediately afterwards, without executing the command list
-		D3D12_RESOURCE_BARRIER uavBarrier = {};
-		uavBarrier.Type = D3D12_RESOURCE_BARRIER_TYPE_UAV;
-		uavBarrier.UAV.pResource = TLASResult.Get();
-		uavBarrier.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
-		commandList->ResourceBarrier(1, &uavBarrier);
-
-	}
+	tlas.AddInstance(instance1);
+	tlas.AddInstance(instance2);
+	tlas.Generate(commandList, TLAS);
 }
 
 void Application::CreateRaytracingPipeline(ID3D12Device11* device)

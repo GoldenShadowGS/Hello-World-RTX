@@ -4,10 +4,7 @@
 #include "Renderer.h"
 #include "Camera.h"
 
-struct Vertex
-{
-	float x, y, z;
-};
+class HeapManager;
 
 class Application
 {
@@ -36,16 +33,10 @@ private:
 	void OnInit();
 	// Assets
 	void BuildAssets(ID3D12Device11* device, ID3D12GraphicsCommandList6* commandList);
+	void BuildTLAS(ID3D12Device11* device, ID3D12GraphicsCommandList6* commandList, HeapManager* heap);
 
-	Microsoft::WRL::ComPtr<ID3D12Resource2> Matrix;			// Holds the matrices of the instances
-	Microsoft::WRL::ComPtr<ID3D12Resource2> VertexBuffer;	// Holds the Vertices
-	Microsoft::WRL::ComPtr<ID3D12Resource2> IndexBuffer;	// Holds the indices
-	Microsoft::WRL::ComPtr<ID3D12Resource2> BLScratch;		// Scratch memory for AS builder 
-	Microsoft::WRL::ComPtr<ID3D12Resource2> BLASResult;		// Where the AS is 
-
-	Microsoft::WRL::ComPtr<ID3D12Resource2> TLScratch;		// Scratch memory for AS builder 
-	Microsoft::WRL::ComPtr<ID3D12Resource2> TLASResult;		// Where the AS is 
-	Microsoft::WRL::ComPtr<ID3D12Resource2> descriptorsBuffer;
+	Microsoft::WRL::ComPtr<ID3D12Resource2> BLAS;		// Where the AS is 
+	Microsoft::WRL::ComPtr<ID3D12Resource2> TLAS;		// Where the AS is 
 
 	// #DXR
 	void CreateRaytracingPipeline(ID3D12Device11* device);
@@ -78,4 +69,5 @@ private:
 	const WCHAR* ClosestHitName = L"ClosestHit";
 	const WCHAR* HitGroupName = L"HitGroup";
 	Camera m_Camera;
+	float x = 0.0f, y = 0.0f;
 };
