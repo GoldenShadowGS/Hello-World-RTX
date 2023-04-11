@@ -26,17 +26,18 @@ void ClosestHit(inout HitInfo payload, Attributes attrib)
 	//float3 combinedcolor = (originalcolor + barycentrics);
 	float3 color = vertex[id].color.xyz;
 
+	//payload.colorAndDistance.xyz /= 4;
+	payload.colorAndDistance.xyz += color / (payload.depth+3);
+
 	RayDesc ray;
 	ray.Origin = worldRayOrigin;
 	ray.Direction = reflect(WorldRayDirection(), worldNormal);
-	ray.TMin = 0;
+	ray.TMin = 0.00001;
 	ray.TMax = 100000;
-
-	if (payload.depth < 3)
+	if (payload.depth < 10)
 	{
 		payload.depth += 1;
-		TraceRay(Scene, RAY_FLAG_NONE, 0, 0, 0, 0, ray, payload);
-		payload.colorAndDistance.xyz += color;
+		TraceRay(Scene, RAY_FLAG_NONE, 0xFF, 0, 0, 0, ray, payload);
 	}
 	//payload.colorAndDistance.xyz += float4(payload.colorAndDistance.xyz * color, RayTCurrent());
 }

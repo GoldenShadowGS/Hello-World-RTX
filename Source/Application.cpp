@@ -272,12 +272,12 @@ void Application::BuildAssets(ID3D12GraphicsCommandList6* commandList)
 void Application::BuildScene(ID3D12GraphicsCommandList6* commandList)
 {
 	m_Scene.Reset();
-	XMVECTOR quat = XMQuaternionRotationAxis({ 1.5f,4.0f,18.0f }, angle2 * 8.1f);
+	XMVECTOR quat = XMQuaternionRotationAxis({ 1.5f,4.0f,18.0f }, angle2 * 0.1f);
 	XMMATRIX matrix1 = XMMatrixRotationZ(angle2) * XMMatrixTranslation(1, 0, 0) * XMMatrixRotationZ(angle1);
 	XMMATRIX matrix2 = XMMatrixRotationQuaternion(quat);
 	XMMATRIX matrixIdentity = XMMatrixIdentity();
 	m_Scene.AddInstance(MeshCube, &matrix1, 0, 0);
-	m_Scene.AddInstance(MeshCube, &matrixIdentity, 0, 0);
+	m_Scene.AddInstance(MeshCube, &matrix2, 0, 0);
 	m_Scene.Build(commandList);
 }
 
@@ -395,7 +395,7 @@ void Application::CreateRaytracingPipeline(ID3D12Device11* device)
 
 
 	D3D12_RAYTRACING_PIPELINE_CONFIG pipelineConfig = {};
-	pipelineConfig.MaxTraceRecursionDepth = 3; // Test this
+	pipelineConfig.MaxTraceRecursionDepth = 11; // Test this
 
 	subobjects[12].Type = D3D12_STATE_SUBOBJECT_TYPE_RAYTRACING_PIPELINE_CONFIG;
 	subobjects[12].pDesc = &pipelineConfig;
