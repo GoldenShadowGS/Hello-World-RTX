@@ -56,12 +56,12 @@ ComPtr<ID3D12Resource2> HeapManager::CreateResource(ID3D12Device11* device, Heap
 	return m_Heaps[type].CreateResource(device, desc, state, clearvalue);
 }
 
-ComPtr<ID3D12Resource2> HeapManager::CreateBufferResource(ID3D12Device11* device, HeapType type, D3D12_RESOURCE_STATES state, UINT64 heapsize, D3D12_RESOURCE_FLAGS flags)
+ComPtr<ID3D12Resource2> HeapManager::CreateBufferResource(ID3D12Device11* device, HeapType type, D3D12_RESOURCE_STATES state, UINT64 size, D3D12_RESOURCE_FLAGS flags)
 {
 	D3D12_RESOURCE_DESC ResourceDesc = {};
 	ResourceDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
 	ResourceDesc.Alignment = 0;
-	ResourceDesc.Width = heapsize;
+	ResourceDesc.Width = size;
 	ResourceDesc.Height = 1;
 	ResourceDesc.DepthOrArraySize = 1;
 	ResourceDesc.MipLevels = 1;

@@ -12,6 +12,14 @@ struct Vertex
 	float x, y, z;
 };
 
+struct StructuredVertex
+{
+	Vertex normal;
+	float pad;
+	Vertex color;
+	float pad2;
+};
+
 struct MeshData
 {
 	std::vector<Vertex> m_Vertices;

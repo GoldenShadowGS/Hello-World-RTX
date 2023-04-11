@@ -3,6 +3,7 @@
 #include "Window.h"
 #include "Renderer.h"
 #include "Camera.h"
+#include "AccelerationStructures.h"
 
 class HeapManager;
 
@@ -32,11 +33,11 @@ private:
 
 	void OnInit();
 	// Assets
-	void BuildAssets(ID3D12Device11* device, ID3D12GraphicsCommandList6* commandList);
-	void BuildTLAS(ID3D12Device11* device, ID3D12GraphicsCommandList6* commandList, HeapManager* heap);
+	void BuildAssets(ID3D12GraphicsCommandList6* commandList);
 
-	Microsoft::WRL::ComPtr<ID3D12Resource2> BLAS;		// Where the AS is 
-	Microsoft::WRL::ComPtr<ID3D12Resource2> TLAS;		// Where the AS is 
+	void BuildScene(ID3D12GraphicsCommandList6* commandList);
+
+	SceneAccelerationStructure m_Scene;
 
 	// #DXR
 	void CreateRaytracingPipeline(ID3D12Device11* device);
@@ -48,18 +49,15 @@ private:
 	Microsoft::WRL::ComPtr<ID3D12RootSignature> m_missSignature;
 
 	void CreateRootSignatures(ID3D12Device11* device);
-	Microsoft::WRL::ComPtr<ID3D12RootSignature> m_GlobalRootSignature;
-	Microsoft::WRL::ComPtr<ID3D12RootSignature> m_LocalRootSignature;
+	//Microsoft::WRL::ComPtr<ID3D12RootSignature> m_GlobalRootSignature;
+	//Microsoft::WRL::ComPtr<ID3D12RootSignature> m_LocalRootSignature;
 	// Ray tracing pipeline state
 	Microsoft::WRL::ComPtr<ID3D12StateObject> m_rtStateObject;
-	// Ray tracing pipeline state properties, retaining the shader identifiers
-	// to use in the Shader Binding Table
-	Microsoft::WRL::ComPtr<ID3D12StateObjectProperties> m_rtStateObjectProps;
 
 	Microsoft::WRL::ComPtr<ID3D12Resource2> m_outputResource;
 
 	void CreateRaytracingOutputBuffer();
-	void CreateShaderResourceHeap(ID3D12Device11* device, DescriptorHeap* descriptorHeap);
+	//void CreateShaderResourceHeap(ID3D12Device11* device, DescriptorHeap* descriptorHeap);
 
 	void CreateShaderBindingTable(ID3D12Device11* device, DescriptorHeap* descriptorHeap);
 	Microsoft::WRL::ComPtr<ID3D12Resource2> m_ShaderBindingTable;
@@ -68,6 +66,10 @@ private:
 	const WCHAR* MissName = L"Miss";
 	const WCHAR* ClosestHitName = L"ClosestHit";
 	const WCHAR* HitGroupName = L"HitGroup";
+
 	Camera m_Camera;
-	float x = 0.0f, y = 0.0f;
+	StructuredBuffer m_StructuredBuffer;
+
+	float angle1 = 0.0f;
+	float angle2 = 0.0f;
 };

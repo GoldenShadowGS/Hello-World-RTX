@@ -3,7 +3,7 @@
 class RootSignatureGenerator
 {
 public:
-	RootSignatureGenerator(ID3D12Device11* device, D3D12_ROOT_SIGNATURE_FLAGS flags);
+	RootSignatureGenerator(ID3D12Device11* device, D3D12_ROOT_SIGNATURE_FLAGS flags = D3D12_ROOT_SIGNATURE_FLAG_NONE);
 	void AddParameter(D3D12_ROOT_PARAMETER rootParameter);
 	void AddStaticSampler(D3D12_STATIC_SAMPLER_DESC staticSamplerDesc);
 	Microsoft::WRL::ComPtr<ID3D12RootSignature> Generate();

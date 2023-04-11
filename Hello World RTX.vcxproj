@@ -151,6 +151,7 @@
     </ClCompile>
     <ClCompile Include="Source\Renderer.cpp" />
     <ClCompile Include="Source\RootSignatureGenerator.cpp" />
+    <ClCompile Include="Source\StructuredBuffer.cpp" />
     <ClCompile Include="Source\SwapChain.cpp" />
     <ClCompile Include="Source\Window.cpp" />
   </ItemGroup>
@@ -166,6 +167,7 @@
     <ClInclude Include="Source\PCH.h" />
     <ClInclude Include="Source\Renderer.h" />
     <ClInclude Include="Source\RootSignatureGenerator.h" />
+    <ClInclude Include="Source\StructuredBuffer.h" />
     <ClInclude Include="Source\SwapChain.h" />
     <ClInclude Include="Source\DX12Utility.h" />
     <ClInclude Include="Source\AccelerationStructures.h" />

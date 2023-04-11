@@ -27,7 +27,7 @@ class HeapManager
 public:
 	void Create(ID3D12Device11* device);
 	Microsoft::WRL::ComPtr<ID3D12Resource2> CreateResource(ID3D12Device11* device, HeapType type, D3D12_RESOURCE_DESC* desc, D3D12_RESOURCE_STATES state, D3D12_CLEAR_VALUE* clearvalue = nullptr);
-	Microsoft::WRL::ComPtr<ID3D12Resource2> CreateBufferResource(ID3D12Device11* device, HeapType type, D3D12_RESOURCE_STATES state, UINT64 heapsize, D3D12_RESOURCE_FLAGS flags = D3D12_RESOURCE_FLAG_NONE);
+	Microsoft::WRL::ComPtr<ID3D12Resource2> CreateBufferResource(ID3D12Device11* device, HeapType type, D3D12_RESOURCE_STATES state, UINT64 size, D3D12_RESOURCE_FLAGS flags = D3D12_RESOURCE_FLAG_NONE);
 	void ResetHeapOffset(HeapType type);
 private:
 	SingleHeap m_Heaps[6];

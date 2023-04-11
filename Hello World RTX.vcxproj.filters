@@ -66,6 +66,9 @@
     <ClCompile Include="Source\AccelerationStructures.cpp">
       <Filter>Source Files\Renderer</Filter>
     </ClCompile>
+    <ClCompile Include="Source\StructuredBuffer.cpp">
+      <Filter>Source Files\Renderer</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Source\PCH.h">
@@ -112,6 +115,9 @@
     </ClInclude>
     <ClInclude Include="Source\MeshData.h">
       <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\StructuredBuffer.h">
+      <Filter>Header Files\Renderer</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

@@ -6,19 +6,13 @@
 
 using Microsoft::WRL::ComPtr;
 
-// TLAS_Generator
 
-TLAS_Generator::TLAS_Generator(ID3D12Device11* device, HeapManager* heap) :
-	m_Device(device),
-	m_Heap(heap)
-{}
-
-D3D12_RAYTRACING_INSTANCE_DESC CreateInstance(ID3D12Resource2* blas, DirectX::XMMATRIX* transform, UINT id, UINT hitGroupIndex)
+D3D12_RAYTRACING_INSTANCE_DESC CreateInstance(ID3D12Resource2* blas, DirectX::XMMATRIX* transform, UINT instanceID, UINT hitGroupIndex)
 {
 	DirectX::XMMATRIX matrix = XMMatrixTranspose(*transform);
 	D3D12_RAYTRACING_INSTANCE_DESC instanceDesc = {};
 	memcpy(&instanceDesc.Transform, &matrix, sizeof(instanceDesc.Transform));
-	instanceDesc.InstanceID = id; // Instance ID visible in the shader in InstanceID()
+	instanceDesc.InstanceID = instanceID; // Instance ID visible in the shader in InstanceID()
 	instanceDesc.InstanceMask = 0xFF; // Visibility mask, always visible here
 	instanceDesc.InstanceContributionToHitGroupIndex = hitGroupIndex; // Index of the hit group invoked upon intersection
 	instanceDesc.Flags = D3D12_RAYTRACING_INSTANCE_FLAG_NONE;
@@ -26,24 +20,60 @@ D3D12_RAYTRACING_INSTANCE_DESC CreateInstance(ID3D12Resource2* blas, DirectX::XM
 	return instanceDesc;
 }
 
-void TLAS_Generator::AddInstance(const D3D12_RAYTRACING_INSTANCE_DESC& instanceDesc)
+
+void SceneAccelerationStructure::Init(ID3D12Device11* device, HeapManager* heap)
 {
-	m_InstanceDesc.push_back(instanceDesc);
+	m_Device = device;
+	m_Heap = heap;
 }
 
-void TLAS_Generator::Generate(ID3D12GraphicsCommandList6* commandList, ComPtr<ID3D12Resource2>& resultTlas)
+void SceneAccelerationStructure::Reset()
+{
+	m_InstanceDescs.clear();
+	m_Heap->ResetHeapOffset(TLASHeap);
+}
+
+void SceneAccelerationStructure::AddMesh(ID3D12GraphicsCommandList6* commandList, BLASIdentifier id, MeshData* mesh)
+{
+	Microsoft::WRL::ComPtr<ID3D12Resource2> blas;
+	BLAS_Generator blasgen(m_Device, m_Heap, mesh);
+	blasgen.Generate(commandList, blas);
+	BLAS[id] = blas;
+}
+
+void SceneAccelerationStructure::AddInstance(BLASIdentifier id, DirectX::XMMATRIX* transform, UINT instanceID, UINT hitGroupIndex)
+{
+	m_InstanceDescs.push_back(CreateInstance(BLAS[id].Get(), transform, instanceID, hitGroupIndex));
+}
+
+void SceneAccelerationStructure::Build(ID3D12GraphicsCommandList6* commandList)
+{
+	TLAS_Generator tlas(m_Device, m_Heap);
+	tlas.Generate(commandList, TLAS, m_InstanceDescs);
+}
+
+
+
+// TLAS_Generator
+
+TLAS_Generator::TLAS_Generator(ID3D12Device11* device, HeapManager* heap) :
+	m_Device(device),
+	m_Heap(heap)
+{}
+
+void TLAS_Generator::Generate(ID3D12GraphicsCommandList6* commandList, Microsoft::WRL::ComPtr<ID3D12Resource2>& resultTlas, std::vector<D3D12_RAYTRACING_INSTANCE_DESC>& instanceDescs)
 {
 	D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS prebuildDesc = {};
 	prebuildDesc.Type = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL;
 	prebuildDesc.DescsLayout = D3D12_ELEMENTS_LAYOUT_ARRAY;
-	prebuildDesc.NumDescs = (UINT)m_InstanceDesc.size();
+	prebuildDesc.NumDescs = (UINT)instanceDescs.size();
 	prebuildDesc.Flags = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_TRACE;
 
 	D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO prebuild_info = {};
 
 	m_Device->GetRaytracingAccelerationStructurePrebuildInfo(&prebuildDesc, &prebuild_info);
 
-	const UINT64 instanceDescsSize = Align64(sizeof(D3D12_RAYTRACING_INSTANCE_DESC) * m_InstanceDesc.size(), D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT);
+	const UINT64 instanceDescsSize = Align64(sizeof(D3D12_RAYTRACING_INSTANCE_DESC) * instanceDescs.size(), D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT);
 	const UINT64 scratchSize = Align64(prebuild_info.ScratchDataSizeInBytes, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT);
 	const UINT64 resultSize = Align64(prebuild_info.ResultDataMaxSizeInBytes, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT);
 
@@ -52,10 +82,10 @@ void TLAS_Generator::Generate(ID3D12GraphicsCommandList6* commandList, ComPtr<ID
 	m_DescriptorsBuffer = m_Heap->CreateBufferResource(m_Device, ScratchUploadHeap, D3D12_RESOURCE_STATE_GENERIC_READ, instanceDescsSize);
 
 	void* Destination = nullptr;
-	const UINT Size = (UINT)sizeof(D3D12_RAYTRACING_INSTANCE_DESC) * (UINT)m_InstanceDesc.size();
+	const UINT Size = (UINT)sizeof(D3D12_RAYTRACING_INSTANCE_DESC) * (UINT)instanceDescs.size();
 	const D3D12_RANGE readRange = { 0, 0 };
 	ThrowIfFailed(m_DescriptorsBuffer->Map(0, &readRange, &Destination));
-	memcpy(Destination, m_InstanceDesc.data(), Size);
+	memcpy(Destination, instanceDescs.data(), Size);
 	m_DescriptorsBuffer->Unmap(0, nullptr);
 
 	// Create a descriptor of the requested builder work, to generate a top-level AS from the input parameters
