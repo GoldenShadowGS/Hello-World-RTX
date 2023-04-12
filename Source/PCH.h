@@ -27,5 +27,6 @@
 #include <map>
 #include <immintrin.h>
 #include <vector>
+#include <list>
 #include <atlstr.h>
  

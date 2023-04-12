@@ -3,8 +3,8 @@
 #include "Input.h"
 #include "DX12Utility.h"
 #include "RootSignatureGenerator.h"
-#include "AccelerationStructures.h"
 #include "Heap.h"
+#include "PipelineStateObject.h"
 
 #define WINDOWTITLE L"Hello World RTX"
 #define FULLSCREENMODE false
@@ -228,16 +228,6 @@ void Application::OnInit()
 	m_Renderer.ExecuteCommandList();
 }
 
-Vertex Cross(Vertex v1, Vertex v2)
-{
-	return { v1.y * v2.z - v1.z * v2.y,	v1.z * v2.x - v1.x * v2.z, v1.x * v2.y - v1.y * v2.x };
-}
-
-Vertex Subtract(Vertex v1, Vertex v2)
-{
-	return { v1.x - v2.x, v1.y - v2.y, v1.z - v2.z };
-}
-
 void Application::BuildAssets(ID3D12GraphicsCommandList6* commandList)
 {
 	std::vector<Vertex> vertices =
@@ -285,6 +275,32 @@ void Application::BuildScene(ID3D12GraphicsCommandList6* commandList)
 }
 
 void Application::CreateRaytracingPipeline(ID3D12Device11* device)
+{
+	const WCHAR* exports[3] = { RayGenName, MissName, ClosestHitName };
+
+	D3D12_EXPORT_DESC exportdesc[3] = {};
+	exportdesc[0].Name = exports[0];
+	exportdesc[1].Name = exports[1];
+	exportdesc[2].Name = exports[2];
+
+	StateObjectGenerator stateObjectGenerator;
+	stateObjectGenerator.AddDXIL_Library(m_rayGenLibrary->GetBufferPointer(), m_rayGenLibrary->GetBufferSize(), &exportdesc[0], 1);
+	stateObjectGenerator.AddDXIL_Library(m_missLibrary->GetBufferPointer(), m_missLibrary->GetBufferSize(), &exportdesc[1], 1);
+	stateObjectGenerator.AddDXIL_Library(m_hitLibrary->GetBufferPointer(), m_hitLibrary->GetBufferSize(), &exportdesc[2], 1);
+	stateObjectGenerator.AddHitGroup(HitGroupName, D3D12_HIT_GROUP_TYPE_TRIANGLES, nullptr, ClosestHitName, nullptr);
+	int shaderConfigIndex = stateObjectGenerator.AddShaderConfig(5 * sizeof(float), 2 * sizeof(float));
+	stateObjectGenerator.AddExportsAssociation(exports, 3, shaderConfigIndex);
+	int raygenRootSigIndex = stateObjectGenerator.AddLocalRootSignature(m_rayGenSignature.Get());
+	int missRootSigIndex = stateObjectGenerator.AddLocalRootSignature(m_missSignature.Get());
+	int hitRootSigIndex = stateObjectGenerator.AddLocalRootSignature(m_hitSignature.Get());
+	stateObjectGenerator.AddExportsAssociation(&exports[0], 1, raygenRootSigIndex);
+	stateObjectGenerator.AddExportsAssociation(&exports[1], 1, missRootSigIndex);
+	stateObjectGenerator.AddExportsAssociation(&exports[2], 1, hitRootSigIndex);
+	stateObjectGenerator.AddPipelineConfig(31);
+	m_rtStateObject = stateObjectGenerator.Build(device);
+}
+
+void Application::CreateRaytracingPipelineOLD(ID3D12Device11* device)
 {
 	const WCHAR* exports[3] = { RayGenName, MissName, ClosestHitName };
 

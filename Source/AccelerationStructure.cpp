@@ -1,25 +1,10 @@
 #include "PCH.h"
-#include "AccelerationStructures.h"
+#include "AccelerationStructure.h"
 #include "Heap.h"
 #include "MeshData.h"
 #include "DX12Utility.h"
 
 using Microsoft::WRL::ComPtr;
-
-
-D3D12_RAYTRACING_INSTANCE_DESC CreateInstance(ID3D12Resource2* blas, DirectX::XMMATRIX* transform, UINT instanceID, UINT hitGroupIndex)
-{
-	DirectX::XMMATRIX matrix = XMMatrixTranspose(*transform);
-	D3D12_RAYTRACING_INSTANCE_DESC instanceDesc = {};
-	memcpy(&instanceDesc.Transform, &matrix, sizeof(instanceDesc.Transform));
-	instanceDesc.InstanceID = instanceID; // Instance ID visible in the shader in InstanceID()
-	instanceDesc.InstanceMask = 0xFF; // Visibility mask, always visible here
-	instanceDesc.InstanceContributionToHitGroupIndex = hitGroupIndex; // Index of the hit group invoked upon intersection
-	instanceDesc.Flags = D3D12_RAYTRACING_INSTANCE_FLAG_NONE;
-	instanceDesc.AccelerationStructure = blas->GetGPUVirtualAddress();
-	return instanceDesc;
-}
-
 
 void SceneAccelerationStructure::Init(ID3D12Device11* device, HeapManager* heap)
 {
@@ -43,7 +28,15 @@ void SceneAccelerationStructure::AddMesh(ID3D12GraphicsCommandList6* commandList
 
 void SceneAccelerationStructure::AddInstance(BLASIdentifier id, DirectX::XMMATRIX* transform, UINT instanceID, UINT hitGroupIndex)
 {
-	m_InstanceDescs.push_back(CreateInstance(BLAS[id].Get(), transform, instanceID, hitGroupIndex));
+	DirectX::XMMATRIX matrix = XMMatrixTranspose(*transform);
+	D3D12_RAYTRACING_INSTANCE_DESC instanceDesc = {};
+	memcpy(&instanceDesc.Transform, &matrix, sizeof(instanceDesc.Transform));
+	instanceDesc.InstanceID = instanceID; // Instance ID visible in the shader in InstanceID()
+	instanceDesc.InstanceMask = 0xFF; // Visibility mask, always visible here
+	instanceDesc.InstanceContributionToHitGroupIndex = hitGroupIndex; // Index of the hit group invoked upon intersection
+	instanceDesc.Flags = D3D12_RAYTRACING_INSTANCE_FLAG_NONE;
+	instanceDesc.AccelerationStructure = BLAS[id].Get()->GetGPUVirtualAddress();
+	m_InstanceDescs.push_back(instanceDesc);
 }
 
 void SceneAccelerationStructure::Build(ID3D12GraphicsCommandList6* commandList)

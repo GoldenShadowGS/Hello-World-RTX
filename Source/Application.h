@@ -3,7 +3,7 @@
 #include "Window.h"
 #include "Renderer.h"
 #include "Camera.h"
-#include "AccelerationStructures.h"
+#include "AccelerationStructure.h"
 
 class HeapManager;
 
@@ -41,6 +41,7 @@ private:
 
 	// #DXR
 	void CreateRaytracingPipeline(ID3D12Device11* device);
+	void CreateRaytracingPipelineOLD(ID3D12Device11* device);
 	Microsoft::WRL::ComPtr<IDxcBlob> m_rayGenLibrary;
 	Microsoft::WRL::ComPtr<IDxcBlob> m_hitLibrary;
 	Microsoft::WRL::ComPtr<IDxcBlob> m_missLibrary;
@@ -49,7 +50,7 @@ private:
 	Microsoft::WRL::ComPtr<ID3D12RootSignature> m_missSignature;
 
 	void CreateRootSignatures(ID3D12Device11* device);
-	//Microsoft::WRL::ComPtr<ID3D12RootSignature> m_GlobalRootSignature;
+	Microsoft::WRL::ComPtr<ID3D12RootSignature> m_GlobalRootSignature;
 	//Microsoft::WRL::ComPtr<ID3D12RootSignature> m_LocalRootSignature;
 	// Ray tracing pipeline state
 	Microsoft::WRL::ComPtr<ID3D12StateObject> m_rtStateObject;
