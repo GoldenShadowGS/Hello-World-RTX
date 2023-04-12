@@ -246,8 +246,7 @@ void Application::BuildAssets(ID3D12GraphicsCommandList6* commandList)
 	MeshData cube = { vertices, indices, sizeof(Vertex) };
 
 	std::vector<StructuredVertex> structuredVertex;
-	Vertex Color = { 0.5,0.5,0.5};
-	int j = 0;
+	Vertex Color = { 0.5,0.5,0.5 };
 	for (int i = 0; i < indices.size(); i += 3)
 	{
 		Vertex v1 = vertices[indices[i]];
@@ -258,7 +257,6 @@ void Application::BuildAssets(ID3D12GraphicsCommandList6* commandList)
 		sv.normal = normal;
 		sv.color = Color;
 		structuredVertex.push_back(sv);
-		j++;
 	}
 
 	UINT64 size = structuredVertex.size() * sizeof(StructuredVertex);
@@ -272,12 +270,17 @@ void Application::BuildAssets(ID3D12GraphicsCommandList6* commandList)
 void Application::BuildScene(ID3D12GraphicsCommandList6* commandList)
 {
 	m_Scene.Reset();
-	XMVECTOR quat = XMQuaternionRotationAxis({ 1.5f,4.0f,18.0f }, angle2 * 0.1f);
+	XMVECTOR quat = XMQuaternionRotationAxis({ 1.5f,4.0f,13.0f }, angle2 * 2.3f);
+	XMVECTOR quat2 = XMQuaternionRotationAxis({ 1.5f,1.0f,4.0f }, angle2 * 8.3f);
 	XMMATRIX matrix1 = XMMatrixRotationZ(angle2) * XMMatrixTranslation(1, 0, 0) * XMMatrixRotationZ(angle1);
-	XMMATRIX matrix2 = XMMatrixRotationQuaternion(quat);
+	XMMATRIX matrix2 = XMMatrixTranslation(0.2f, 1.0f, 0.0f) * XMMatrixRotationQuaternion(quat);
+	XMMATRIX matrix3 = XMMatrixRotationZ(angle2 * -2.0f);
+	XMMATRIX matrix4 = XMMatrixRotationQuaternion(quat2) * XMMatrixTranslation(0.0f, 0.0f, 1.6f);
 	XMMATRIX matrixIdentity = XMMatrixIdentity();
 	m_Scene.AddInstance(MeshCube, &matrix1, 0, 0);
 	m_Scene.AddInstance(MeshCube, &matrix2, 0, 0);
+	m_Scene.AddInstance(MeshCube, &matrix3, 0, 0);
+	m_Scene.AddInstance(MeshCube, &matrix4, 0, 0);
 	m_Scene.Build(commandList);
 }
 
@@ -395,7 +398,7 @@ void Application::CreateRaytracingPipeline(ID3D12Device11* device)
 
 
 	D3D12_RAYTRACING_PIPELINE_CONFIG pipelineConfig = {};
-	pipelineConfig.MaxTraceRecursionDepth = 11; // Test this
+	pipelineConfig.MaxTraceRecursionDepth = 31; // Test this
 
 	subobjects[12].Type = D3D12_STATE_SUBOBJECT_TYPE_RAYTRACING_PIPELINE_CONFIG;
 	subobjects[12].pDesc = &pipelineConfig;
