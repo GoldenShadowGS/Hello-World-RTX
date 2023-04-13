@@ -96,8 +96,8 @@ void Renderer::Create(Window* window)
 #endif
 
 	m_CommandQueue.Create(m_Device.Get(), D3D12_COMMAND_LIST_TYPE_DIRECT);
-	m_SwapChain.Create(m_Device.Get(), window, &m_CommandQueue, 3, TRUE);
 	m_DescriptorHeap.Create(m_Device.Get(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 10, D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE);
+	m_SwapChain.Create(m_Device.Get(), &m_CommandQueue, m_DescriptorHeap.GetCPUHandle(0), window->GetHandle(), window->GetClientWidth(), window->GetClientHeight(), 3, TRUE);
 	m_CommandAllocator = CreateCommandAllocator(m_Device.Get(), D3D12_COMMAND_LIST_TYPE_DIRECT);
 	m_CommandList = CreateCommandList(m_Device.Get(), m_CommandAllocator.Get(), D3D12_COMMAND_LIST_TYPE_DIRECT);
 

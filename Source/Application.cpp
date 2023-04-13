@@ -51,33 +51,27 @@ int Application::Run()
 		}
 	}
 	return 0;
-
 }
 
 void Application::Resize()
 {
 	m_Window.ResizedWindow();
 	m_Camera.SetAspectRatio((float)m_Window.GetClientWidth() / m_Window.GetClientHeight());
-	if (m_Renderer.m_SwapChain.Resize())
-	{
-		CreateRaytracingOutputBuffer();
-	}
+	m_Renderer.m_SwapChain.Resize(m_Window.GetClientWidth(), m_Window.GetClientHeight());
 }
 
 void Application::Update()
 {
-	ID3D12Device11* device = m_Renderer.GetDevice();
-	HeapManager* heapManager = m_Renderer.GetHeap();
+	UpdateFrameTime();
+
 	ID3D12CommandAllocator* commandAllocator = m_Renderer.m_CommandAllocator.Get();
 	ID3D12GraphicsCommandList6* commandList = m_Renderer.GetCommandList();
 
 	ThrowIfFailed(commandAllocator->Reset());
 	ThrowIfFailed(commandList->Reset(commandAllocator, nullptr));
 
-	UpdateFrameTime();
-
-	heapManager->ResetHeapOffset(ScratchDefaultHeap);
-	heapManager->ResetHeapOffset(ScratchUploadHeap);
+	m_Renderer.GetHeap()->ResetHeapOffset(ScratchDefaultHeap);
+	m_Renderer.GetHeap()->ResetHeapOffset(ScratchUploadHeap);
 
 	angle1 += 0.512465799111f * m_FrameTime;
 	angle2 += 0.812465799111f * m_FrameTime * 0.38712f;
@@ -94,21 +88,11 @@ void Application::Render()
 	ID3D12CommandAllocator* commandAllocator = m_Renderer.m_CommandAllocator.Get();
 	ID3D12GraphicsCommandList6* commandList = m_Renderer.GetCommandList();
 
-	//ThrowIfFailed(commandAllocator->Reset());
-	//ThrowIfFailed(commandList->Reset(commandAllocator, nullptr));
-
-	m_Renderer.m_SwapChain.TransitionBackBuffer(commandList, D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_COPY_DEST);
-
-	TransitionResource(commandList, m_outputResource.Get(), D3D12_RESOURCE_STATE_COPY_SOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-
-	//Do Ray Tracing on Output now
-
+	m_Renderer.m_SwapChain.PrepareFrameStart(commandList);
+	commandList->SetPipelineState1(m_StateObject.Get());
 	commandList->SetDescriptorHeaps(1, m_Renderer.GetDescriptorHeap()->GetAddressOfHeap());
 
-	//commandList->SetComputeRootSignature(m_GlobalRootSignature.Get());
-
 	D3D12_DISPATCH_RAYS_DESC DispatchDesc = {};
-
 	DispatchDesc.RayGenerationShaderRecord.StartAddress = m_ShaderBindingTable->GetGPUVirtualAddress();
 	DispatchDesc.RayGenerationShaderRecord.SizeInBytes = 64;
 	DispatchDesc.MissShaderTable.StartAddress = DispatchDesc.RayGenerationShaderRecord.StartAddress + DispatchDesc.RayGenerationShaderRecord.SizeInBytes;
@@ -118,21 +102,12 @@ void Application::Render()
 	DispatchDesc.HitGroupTable.SizeInBytes = 64;
 	DispatchDesc.HitGroupTable.StrideInBytes = 64;
 	DispatchDesc.CallableShaderTable;
-	DispatchDesc.Width = m_Window.GetClientWidth();
-	DispatchDesc.Height = m_Window.GetClientHeight();
+	DispatchDesc.Width = m_Renderer.m_SwapChain.GetWidth();
+	DispatchDesc.Height = m_Renderer.m_SwapChain.GetHeight();
 	DispatchDesc.Depth = 1;
-
-	commandList->SetPipelineState1(m_rtStateObject.Get());
-	// Dispatch the rays and write to the raytracing output
 	commandList->DispatchRays(&DispatchDesc);
 
-
-	//Copy Output to Backbuffer
-	TransitionResource(commandList, m_outputResource.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COPY_SOURCE);
-	m_Renderer.m_SwapChain.CopyResourceToBackBuffer(commandList, m_outputResource.Get());
-
-	m_Renderer.m_SwapChain.TransitionBackBuffer(commandList, D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_PRESENT);
-
+	m_Renderer.m_SwapChain.PrepareFrameEnd(commandList);
 	ThrowIfFailed(commandList->Close());
 
 	m_Renderer.m_CommandQueue.ExecuteCommandList(commandList);
@@ -207,14 +182,10 @@ void Application::OnInit()
 	m_rayGenLibrary = CompileShaderLibrary(L"Shaders/RayGen.hlsl");
 	m_missLibrary = CompileShaderLibrary(L"Shaders/Miss.hlsl");
 	m_hitLibrary = CompileShaderLibrary(L"Shaders/Hit.hlsl");
-
 	CreateRootSignatures(m_Renderer.GetDevice());
-
 	CreateRaytracingPipeline(m_Renderer.GetDevice());
 
-
-	CreateRaytracingOutputBuffer();
-
+	// TODO move this somewhere?
 	D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
 	srvDesc.Format = DXGI_FORMAT_UNKNOWN;
 	srvDesc.ViewDimension = D3D12_SRV_DIMENSION_RAYTRACING_ACCELERATION_STRUCTURE;
@@ -257,6 +228,7 @@ void Application::BuildAssets(ID3D12GraphicsCommandList6* commandList)
 	BuildScene(commandList);
 }
 
+// Rebuild Scene every frame
 void Application::BuildScene(ID3D12GraphicsCommandList6* commandList)
 {
 	m_Scene.Reset();
@@ -276,176 +248,27 @@ void Application::BuildScene(ID3D12GraphicsCommandList6* commandList)
 
 void Application::CreateRaytracingPipeline(ID3D12Device11* device)
 {
-	const WCHAR* exports[3] = { RayGenName, MissName, ClosestHitName };
-
-	D3D12_EXPORT_DESC exportdesc[3] = {};
-	exportdesc[0].Name = exports[0];
-	exportdesc[1].Name = exports[1];
-	exportdesc[2].Name = exports[2];
-
+	const UINT payloadSize = 5 * sizeof(float);
+	const UINT attribSize = 2 * sizeof(float);
 	StateObjectGenerator stateObjectGenerator;
-	stateObjectGenerator.AddDXIL_Library(m_rayGenLibrary->GetBufferPointer(), m_rayGenLibrary->GetBufferSize(), &exportdesc[0], 1);
-	stateObjectGenerator.AddDXIL_Library(m_missLibrary->GetBufferPointer(), m_missLibrary->GetBufferSize(), &exportdesc[1], 1);
-	stateObjectGenerator.AddDXIL_Library(m_hitLibrary->GetBufferPointer(), m_hitLibrary->GetBufferSize(), &exportdesc[2], 1);
-	stateObjectGenerator.AddHitGroup(HitGroupName, D3D12_HIT_GROUP_TYPE_TRIANGLES, nullptr, ClosestHitName, nullptr);
-	int shaderConfigIndex = stateObjectGenerator.AddShaderConfig(5 * sizeof(float), 2 * sizeof(float));
-	stateObjectGenerator.AddExportsAssociation(exports, 3, shaderConfigIndex);
+	stateObjectGenerator.AddDXIL_Library(m_rayGenLibrary->GetBufferPointer(), m_rayGenLibrary->GetBufferSize(), { L"RayGen" });
+	stateObjectGenerator.AddDXIL_Library(m_missLibrary->GetBufferPointer(), m_missLibrary->GetBufferSize(), { L"Miss" });
+	stateObjectGenerator.AddDXIL_Library(m_hitLibrary->GetBufferPointer(), m_hitLibrary->GetBufferSize(), { L"ClosestHit" });
+	stateObjectGenerator.AddHitGroup(L"HitGroup", D3D12_HIT_GROUP_TYPE_TRIANGLES, L"", L"ClosestHit", L"");
+	int shaderConfigIndex = stateObjectGenerator.AddShaderConfig(payloadSize, attribSize);
+	stateObjectGenerator.AddExportsAssociation({ L"RayGen", L"Miss", L"ClosestHit" }, shaderConfigIndex);
 	int raygenRootSigIndex = stateObjectGenerator.AddLocalRootSignature(m_rayGenSignature.Get());
 	int missRootSigIndex = stateObjectGenerator.AddLocalRootSignature(m_missSignature.Get());
 	int hitRootSigIndex = stateObjectGenerator.AddLocalRootSignature(m_hitSignature.Get());
-	stateObjectGenerator.AddExportsAssociation(&exports[0], 1, raygenRootSigIndex);
-	stateObjectGenerator.AddExportsAssociation(&exports[1], 1, missRootSigIndex);
-	stateObjectGenerator.AddExportsAssociation(&exports[2], 1, hitRootSigIndex);
+	stateObjectGenerator.AddExportsAssociation({ L"RayGen" }, raygenRootSigIndex);
+	stateObjectGenerator.AddExportsAssociation({ L"Miss" }, missRootSigIndex);
+	stateObjectGenerator.AddExportsAssociation({ L"ClosestHit" }, hitRootSigIndex);
 	stateObjectGenerator.AddPipelineConfig(31);
-	m_rtStateObject = stateObjectGenerator.Build(device);
-}
-
-void Application::CreateRaytracingPipelineOLD(ID3D12Device11* device)
-{
-	const WCHAR* exports[3] = { RayGenName, MissName, ClosestHitName };
-
-	D3D12_EXPORT_DESC exportdesc[3] = {};
-	exportdesc[0].Name = exports[0];
-	exportdesc[1].Name = exports[1];
-	exportdesc[2].Name = exports[2];
-
-	D3D12_DXIL_LIBRARY_DESC lib_Desc[3] = {};
-	lib_Desc[0].DXILLibrary.pShaderBytecode = m_rayGenLibrary->GetBufferPointer();
-	lib_Desc[0].DXILLibrary.BytecodeLength = m_rayGenLibrary->GetBufferSize();
-	lib_Desc[0].NumExports = 1;
-	lib_Desc[0].pExports = &exportdesc[0];
-
-	lib_Desc[1].DXILLibrary.pShaderBytecode = m_missLibrary->GetBufferPointer();
-	lib_Desc[1].DXILLibrary.BytecodeLength = m_missLibrary->GetBufferSize();
-	lib_Desc[1].NumExports = 1;
-	lib_Desc[1].pExports = &exportdesc[1];
-
-	lib_Desc[2].DXILLibrary.pShaderBytecode = m_hitLibrary->GetBufferPointer();
-	lib_Desc[2].DXILLibrary.BytecodeLength = m_hitLibrary->GetBufferSize();
-	lib_Desc[2].NumExports = 1;
-	lib_Desc[2].pExports = &exportdesc[2];
-
-	D3D12_STATE_SUBOBJECT subobjects[13] = {};
-	subobjects[0].Type = D3D12_STATE_SUBOBJECT_TYPE_DXIL_LIBRARY;
-	subobjects[0].pDesc = &lib_Desc[0];
-
-	subobjects[1].Type = D3D12_STATE_SUBOBJECT_TYPE_DXIL_LIBRARY;
-	subobjects[1].pDesc = &lib_Desc[1];
-
-	subobjects[2].Type = D3D12_STATE_SUBOBJECT_TYPE_DXIL_LIBRARY;
-	subobjects[2].pDesc = &lib_Desc[2];
-
-	D3D12_HIT_GROUP_DESC hitgroup = {};
-	hitgroup.HitGroupExport = HitGroupName;
-	hitgroup.Type = D3D12_HIT_GROUP_TYPE_TRIANGLES;
-	hitgroup.AnyHitShaderImport = nullptr;
-	hitgroup.ClosestHitShaderImport = ClosestHitName;
-	hitgroup.IntersectionShaderImport = nullptr;
-
-	subobjects[3].Type = D3D12_STATE_SUBOBJECT_TYPE_HIT_GROUP;
-	subobjects[3].pDesc = &hitgroup;
-
-	D3D12_RAYTRACING_SHADER_CONFIG shaderconfig = {};
-	shaderconfig.MaxPayloadSizeInBytes = 5 * sizeof(float);
-	shaderconfig.MaxAttributeSizeInBytes = 2 * sizeof(float);
-
-	subobjects[4].Type = D3D12_STATE_SUBOBJECT_TYPE_RAYTRACING_SHADER_CONFIG;
-	subobjects[4].pDesc = &shaderconfig;
-
-	D3D12_SUBOBJECT_TO_EXPORTS_ASSOCIATION shaderPayloadAssociation = {};
-	shaderPayloadAssociation.pSubobjectToAssociate = &subobjects[4];
-	shaderPayloadAssociation.NumExports = 3;
-	shaderPayloadAssociation.pExports = exports;
-
-	subobjects[5].Type = D3D12_STATE_SUBOBJECT_TYPE_SUBOBJECT_TO_EXPORTS_ASSOCIATION;
-	subobjects[5].pDesc = &shaderPayloadAssociation;
-
-	//------------------------------
-	D3D12_LOCAL_ROOT_SIGNATURE localrootSignatures[3] = {};
-	localrootSignatures[0].pLocalRootSignature = m_rayGenSignature.Get();
-	localrootSignatures[1].pLocalRootSignature = m_missSignature.Get();
-	localrootSignatures[2].pLocalRootSignature = m_hitSignature.Get();
-
-	subobjects[6].Type = D3D12_STATE_SUBOBJECT_TYPE_LOCAL_ROOT_SIGNATURE;
-	subobjects[6].pDesc = &localrootSignatures[0];
-
-	D3D12_SUBOBJECT_TO_EXPORTS_ASSOCIATION exportsAssociation[3] = {};
-	exportsAssociation[0].pSubobjectToAssociate = &subobjects[6];
-	exportsAssociation[0].NumExports = 1;
-	exportsAssociation[0].pExports = &exports[0];
-
-	subobjects[7].Type = D3D12_STATE_SUBOBJECT_TYPE_SUBOBJECT_TO_EXPORTS_ASSOCIATION;
-	subobjects[7].pDesc = &exportsAssociation[0];
-
-
-	subobjects[8].Type = D3D12_STATE_SUBOBJECT_TYPE_LOCAL_ROOT_SIGNATURE;
-	subobjects[8].pDesc = &localrootSignatures[1];
-
-	exportsAssociation[1].pSubobjectToAssociate = &subobjects[8];
-	exportsAssociation[1].NumExports = 1;
-	exportsAssociation[1].pExports = &exports[1];
-
-	subobjects[9].Type = D3D12_STATE_SUBOBJECT_TYPE_SUBOBJECT_TO_EXPORTS_ASSOCIATION;
-	subobjects[9].pDesc = &exportsAssociation[1];
-
-	subobjects[10].Type = D3D12_STATE_SUBOBJECT_TYPE_LOCAL_ROOT_SIGNATURE;
-	subobjects[10].pDesc = &localrootSignatures[2];
-
-	exportsAssociation[2].pSubobjectToAssociate = &subobjects[10];
-	exportsAssociation[2].NumExports = 1;
-	exportsAssociation[2].pExports = &exports[2];
-
-	subobjects[11].Type = D3D12_STATE_SUBOBJECT_TYPE_SUBOBJECT_TO_EXPORTS_ASSOCIATION;
-	subobjects[11].pDesc = &exportsAssociation[2];
-
-	//------------------------------
-	//D3D12_GLOBAL_ROOT_SIGNATURE globalRootSig = {};
-	//globalRootSig.pGlobalRootSignature = m_GlobalRootSignature.Get();
-
-	//subobjects[12].Type = D3D12_STATE_SUBOBJECT_TYPE_GLOBAL_ROOT_SIGNATURE;
-	//subobjects[12].pDesc = &globalRootSig;
-
-
-	//D3D12_LOCAL_ROOT_SIGNATURE localRootSig = {};
-	//localRootSig.pLocalRootSignature = m_LocalRootSignature.Get();
-
-	//subobjects[13].Type = D3D12_STATE_SUBOBJECT_TYPE_LOCAL_ROOT_SIGNATURE;
-	//subobjects[13].pDesc = &localRootSig;
-
-
-	D3D12_RAYTRACING_PIPELINE_CONFIG pipelineConfig = {};
-	pipelineConfig.MaxTraceRecursionDepth = 31; // Test this
-
-	subobjects[12].Type = D3D12_STATE_SUBOBJECT_TYPE_RAYTRACING_PIPELINE_CONFIG;
-	subobjects[12].pDesc = &pipelineConfig;
-
-
-	// Describe the ray tracing pipeline state object
-	D3D12_STATE_OBJECT_DESC pipelineDesc = {};
-	pipelineDesc.Type = D3D12_STATE_OBJECT_TYPE_RAYTRACING_PIPELINE;
-	pipelineDesc.NumSubobjects = 13;
-	pipelineDesc.pSubobjects = subobjects;
-
-	ThrowIfFailed(device->CreateStateObject(&pipelineDesc, IID_PPV_ARGS(&m_rtStateObject)));
-
-	//UINT64 subobjectCount =
-	//	m_libraries.size() +                     // DXIL libraries
-	//	m_hitGroups.size() +                     // Hit group declarations
-	//	1 +                                      // Shader configuration
-	//	1 +                                      // Shader payload
-	//	2 * m_rootSignatureAssociations.size() + // Root signature declaration + association
-	//	2 +                                      // Empty global and local root signatures
-	//	1;                                       // Final pipeline subobject
-
+	m_StateObject = stateObjectGenerator.Build(device);
 }
 
 void Application::CreateRootSignatures(ID3D12Device11* device)
 {
-	//RootSignatureGenerator globalRootSignatureGenerator(device, D3D12_ROOT_SIGNATURE_FLAG_NONE);
-	//m_GlobalRootSignature = globalRootSignatureGenerator.Generate();
-
-	//RootSignatureGenerator localRootSignatureGenerator(device, D3D12_ROOT_SIGNATURE_FLAG_LOCAL_ROOT_SIGNATURE);
-	//m_LocalRootSignature = localRootSignatureGenerator.Generate();
 	{
 		D3D12_DESCRIPTOR_RANGE ranges[2] = {};
 		ranges[0].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_UAV;
@@ -494,63 +317,20 @@ void Application::CreateRootSignatures(ID3D12Device11* device)
 	}
 }
 
-void Application::CreateRaytracingOutputBuffer()
-{
-	ID3D12Device11* device = m_Renderer.GetDevice();
-
-	D3D12_HEAP_PROPERTIES heapProp = { };
-	heapProp.Type = D3D12_HEAP_TYPE_DEFAULT;
-
-	D3D12_RESOURCE_DESC resDesc = {};
-	resDesc.DepthOrArraySize = 1;
-	resDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
-	// The backbuffer is actually DXGI_FORMAT_R8G8B8A8_UNORM_SRGB, but sRGB 
-	// formats cannot be used with UAVs. For accuracy we should convert to sRGB 
-	// ourselves in the shader 
-	resDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
-	resDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
-	resDesc.Width = m_Window.GetClientWidth();
-	resDesc.Height = m_Window.GetClientHeight();
-	resDesc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
-	resDesc.MipLevels = 1;
-	resDesc.SampleDesc.Count = 1;
-
-	device->CreateCommittedResource(&heapProp, D3D12_HEAP_FLAG_NONE, &resDesc, D3D12_RESOURCE_STATE_COPY_SOURCE, nullptr, IID_PPV_ARGS(&m_outputResource));
-
-	D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc = {};
-	uavDesc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D;
-	D3D12_CPU_DESCRIPTOR_HANDLE srvHandle = m_Renderer.m_DescriptorHeap.GetCPUHandle(0);
-	device->CreateUnorderedAccessView(m_outputResource.Get(), nullptr, &uavDesc, srvHandle);
-}
-
 void Application::CreateShaderBindingTable(ID3D12Device11* device, DescriptorHeap* descriptorHeap)
 {
 	D3D12_GPU_DESCRIPTOR_HANDLE srvUavHeapHandle = descriptorHeap->GetGPUHandle(0);
 	ComPtr<ID3D12StateObjectProperties> stateObjectProps;
 	UINT shaderIdentifierSize = D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES;
-	ThrowIfFailed(m_rtStateObject.As(&stateObjectProps));
+	ThrowIfFailed(m_StateObject.As(&stateObjectProps));
 
-	void* rayGenShaderIdentifier = stateObjectProps->GetShaderIdentifier(RayGenName);
-	void* missShaderIdentifier = stateObjectProps->GetShaderIdentifier(MissName);
-	void* hitGroupShaderIdentifier = stateObjectProps->GetShaderIdentifier(HitGroupName);
+	void* rayGenShaderIdentifier = stateObjectProps->GetShaderIdentifier(L"RayGen");
+	void* missShaderIdentifier = stateObjectProps->GetShaderIdentifier(L"Miss");
+	void* hitGroupShaderIdentifier = stateObjectProps->GetShaderIdentifier(L"HitGroup");
 
 	UINT64 elementSize = 64ULL * 3;
 
-	D3D12_RESOURCE_DESC resDesc = {};
-	resDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
-	resDesc.Alignment = 0;
-	resDesc.Width = elementSize;
-	resDesc.Height = 1;
-	resDesc.DepthOrArraySize = 1;
-	resDesc.MipLevels = 1;
-	resDesc.Format = DXGI_FORMAT_UNKNOWN;
-	resDesc.SampleDesc.Count = 1;
-	resDesc.SampleDesc.Quality = 0;
-	resDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
-	resDesc.Flags = D3D12_RESOURCE_FLAG_NONE;
-
-	m_ShaderBindingTable = m_Renderer.GetHeap()->CreateResource(device, UploadHeap, &resDesc, D3D12_RESOURCE_STATE_GENERIC_READ);
-
+	m_ShaderBindingTable = m_Renderer.GetHeap()->CreateBufferResource(device, UploadHeap, D3D12_RESOURCE_STATE_GENERIC_READ, elementSize);
 	void* Source = nullptr;
 	{
 		void* DestinationStart = nullptr;

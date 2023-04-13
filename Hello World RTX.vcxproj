@@ -145,6 +145,7 @@
     <ClCompile Include="Source\Heap.cpp" />
     <ClCompile Include="Source\Input.cpp" />
     <ClCompile Include="Source\Main.cpp" />
+    <ClCompile Include="Source\OutputBuffer.cpp" />
     <ClCompile Include="Source\PCH.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Create</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Create</PrecompiledHeader>
@@ -165,6 +166,7 @@
     <ClInclude Include="Source\Input.h" />
     <ClInclude Include="Source\MathUtility.h" />
     <ClInclude Include="Source\MeshData.h" />
+    <ClInclude Include="Source\OutputBuffer.h" />
     <ClInclude Include="Source\PCH.h" />
     <ClInclude Include="Source\PipelineStateObject.h" />
     <ClInclude Include="Source\Renderer.h" />

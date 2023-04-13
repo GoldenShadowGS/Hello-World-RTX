@@ -72,6 +72,9 @@
     <ClCompile Include="Source\PipelineStateObject.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="Source\OutputBuffer.cpp">
+      <Filter>Source Files\Renderer</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Source\PCH.h">
@@ -124,6 +127,9 @@
     </ClInclude>
     <ClInclude Include="Source\PipelineStateObject.h">
       <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\OutputBuffer.h">
+      <Filter>Header Files\Renderer</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

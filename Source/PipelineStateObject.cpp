@@ -7,36 +7,52 @@ using Microsoft::WRL::ComPtr;
 StateObjectGenerator::StateObjectGenerator()
 {}
 
-int StateObjectGenerator::AddDXIL_Library(void* bytecode, SIZE_T bytecodeSize, D3D12_EXPORT_DESC* exportdesc, UINT numExports)
+int StateObjectGenerator::AddDXIL_Library(void* bytecode, SIZE_T bytecodeSize, const std::vector<std::wstring>& exportNames)
 {
-	D3D12_DXIL_LIBRARY_DESC libDesc = {};
-	libDesc.DXILLibrary.pShaderBytecode = bytecode;
-	libDesc.DXILLibrary.BytecodeLength = bytecodeSize;
-	libDesc.NumExports = numExports;
-	libDesc.pExports = exportdesc;
-	m_LibDescs.push_back(libDesc);
+	DXILLibContainer l;
+	m_DXILLib.push_back(l);
+	DXILLibContainer& lib = m_DXILLib.back();
+	lib.m_ExportNames = exportNames;
+	lib.m_ExportDescs.reserve(lib.m_ExportNames.size());
+	const int size = (int)lib.m_ExportNames.size();
+	for (int i = 0; i < size; i++)
+	{
+		lib.m_ExportDescs.emplace_back(lib.m_ExportNames[i].c_str());
+	}
+
+	lib.m_LibDesc.DXILLibrary.pShaderBytecode = bytecode;
+	lib.m_LibDesc.DXILLibrary.BytecodeLength = bytecodeSize;
+	lib.m_LibDesc.NumExports = (UINT)exportNames.size();
+	lib.m_LibDesc.pExports = lib.m_ExportDescs.data();
 
 	D3D12_STATE_SUBOBJECT subobject = {};
 	subobject.Type = D3D12_STATE_SUBOBJECT_TYPE_DXIL_LIBRARY;
-	subobject.pDesc = &m_LibDescs.back();
+	subobject.pDesc = &lib.m_LibDesc;
 
 	PushSubObject(subobject);
 	return GetBackIndex();
 }
 
-int StateObjectGenerator::AddHitGroup(LPCWSTR HitGroup, D3D12_HIT_GROUP_TYPE type, LPCWSTR anyhit, LPCWSTR closesthit, LPCWSTR intersection)
+int StateObjectGenerator::AddHitGroup(const std::wstring& hitgroup, D3D12_HIT_GROUP_TYPE type, const std::wstring& anyhit, const std::wstring& closesthit, const std::wstring& intersection)
 {
-	D3D12_HIT_GROUP_DESC hitgroup = {};
-	hitgroup.HitGroupExport = HitGroup;
-	hitgroup.Type = type;
-	hitgroup.AnyHitShaderImport = anyhit;
-	hitgroup.ClosestHitShaderImport = closesthit;
-	hitgroup.IntersectionShaderImport = intersection;
-	m_HitGroupDescs.push_back(hitgroup);
+	HitGroupContainer hc;
+	m_HitGroupContainers.push_back(hc);
+	HitGroupContainer& HGC = m_HitGroupContainers.back();
+
+	HGC.HitGroupName = hitgroup;
+	HGC.AnyHitName = anyhit;
+	HGC.ClosestHitName = closesthit;
+	HGC.IntersectionName = intersection;
+
+	HGC.m_HitGroupDesc.HitGroupExport = HGC.HitGroupName.empty() ? nullptr : HGC.HitGroupName.c_str();
+	HGC.m_HitGroupDesc.Type = type;
+	HGC.m_HitGroupDesc.AnyHitShaderImport = HGC.AnyHitName.empty() ? nullptr : HGC.AnyHitName.c_str();
+	HGC.m_HitGroupDesc.ClosestHitShaderImport = HGC.ClosestHitName.empty() ? nullptr : HGC.ClosestHitName.c_str();
+	HGC.m_HitGroupDesc.IntersectionShaderImport = HGC.IntersectionName.empty() ? nullptr : HGC.IntersectionName.c_str();
 
 	D3D12_STATE_SUBOBJECT subobject = {};
 	subobject.Type = D3D12_STATE_SUBOBJECT_TYPE_HIT_GROUP;
-	subobject.pDesc = &m_HitGroupDescs.back();
+	subobject.pDesc = &m_HitGroupContainers.back().m_HitGroupDesc;
 
 	PushSubObject(subobject);
 	return GetBackIndex();
@@ -83,17 +99,28 @@ int StateObjectGenerator::AddGlobalRootSignature(ID3D12RootSignature* rootsig)
 	return GetBackIndex();
 }
 
-int StateObjectGenerator::AddExportsAssociation(LPCWSTR* exports, UINT exportCount, UINT subObjectIndex)
+int StateObjectGenerator::AddExportsAssociation(const std::vector<std::wstring>& exportNames, UINT subObjectIndex)
 {
-	D3D12_SUBOBJECT_TO_EXPORTS_ASSOCIATION shaderPayloadAssociation = {};
-	shaderPayloadAssociation.pSubobjectToAssociate = nullptr;
-	shaderPayloadAssociation.NumExports = exportCount;
-	shaderPayloadAssociation.pExports = exports;
-	m_ShaderPayloadAssociation.push_back(shaderPayloadAssociation);
+	SubObjectAssociationContainer s;
+	m_SubobjectAssociations.push_back(s);
+	SubObjectAssociationContainer& so = m_SubobjectAssociations.back();
+
+	so.m_ExportNames = exportNames;
+	so.m_NamePointers.reserve(so.m_ExportNames.size());
+
+	const int size = (int)so.m_ExportNames.size();
+	for (int i = 0; i < size; i++)
+	{
+		so.m_NamePointers.emplace_back(so.m_ExportNames[i].c_str());
+	}
+
+	so.Association.pSubobjectToAssociate = nullptr;
+	so.Association.NumExports = (UINT)so.m_ExportNames.size();
+	so.Association.pExports = so.m_NamePointers.data();
 
 	D3D12_STATE_SUBOBJECT subobject = {};
 	subobject.Type = D3D12_STATE_SUBOBJECT_TYPE_SUBOBJECT_TO_EXPORTS_ASSOCIATION;
-	subobject.pDesc = &m_ShaderPayloadAssociation.back();
+	subobject.pDesc = &m_SubobjectAssociations.back().Association;
 
 	PushSubObject(subobject, subObjectIndex);
 	return GetBackIndex();

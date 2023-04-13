@@ -73,7 +73,6 @@ ComPtr<ID3D12Resource2> HeapManager::CreateBufferResource(ID3D12Device11* device
 	return CreateResource(device, type, &ResourceDesc, state);
 }
 
-// TODO make this generic
 void HeapManager::ResetHeapOffset(HeapType type)
 {
 	m_Heaps[type].ResetOffset();
