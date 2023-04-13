@@ -207,16 +207,22 @@ void Application::BuildAssets(ID3D12GraphicsCommandList6* commandList)
 	MeshData cube = { vertices, indices, sizeof(Vertex) };
 
 	std::vector<StructuredVertex> structuredVertex;
-	Vertex Color = { 0.5,0.5,0.5 };
+	float Color[4] = { 0.5, 0.5, 0.5, 1.0f };
 	for (int i = 0; i < indices.size(); i += 3)
 	{
 		Vertex v1 = vertices[indices[i]];
 		Vertex v2 = vertices[indices[i + 1]];
 		Vertex v3 = vertices[indices[i + 2]];
-		Vertex normal = Cross(Subtract(v2, v1), Subtract(v3, v1));
+		Vertex normal = Normalize(Cross(Subtract(v2, v1), Subtract(v3, v1)));
 		StructuredVertex sv = {};
-		sv.normal = normal;
-		sv.color = Color;
+		sv.normal[0] = normal.x;
+		sv.normal[1] = normal.y;
+		sv.normal[2] = normal.z;
+		sv.normal[3] = 0.0f;
+		sv.color[0] = abs(normal.x);
+		sv.color[1] = abs(normal.y);
+		sv.color[2] = abs(normal.z);
+		sv.color[3] = 1.0f;
 		structuredVertex.push_back(sv);
 	}
 

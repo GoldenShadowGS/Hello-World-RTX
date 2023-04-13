@@ -4,10 +4,8 @@ RaytracingAccelerationStructure Scene : register(t0);
 
 struct TriVertex
 {
-	float3 normal;
-	float pad;
-	float3 color;
-	float pad2;
+	float4 normal;
+	float4 color;
 };
 
 StructuredBuffer<TriVertex> vertex : register(t2);
@@ -20,15 +18,11 @@ void ClosestHit(inout HitInfo payload, Attributes attrib)
 	float epsilon = 0.0000001f;
 	//float3 barycentrics = float3(1.f - attrib.bary.x - attrib.bary.y, attrib.bary.x, attrib.bary.y);
 
-	float3 worldNormal = normalize(mul((float3x3)ObjectToWorld3x4(), vertex[id].normal));
+	float3 worldNormal = mul((float3x3)ObjectToWorld3x4(), vertex[id].normal.xyz);
 	float3 worldRayOrigin = WorldRayOrigin() + (worldNormal * epsilon * 10.0f) + (WorldRayDirection() * RayTCurrent());
-	//worldNormal = (worldNormal * 2) - 1;
-	//float3 originalcolor = payload.colorAndDistance.xyz;
-	//float3 combinedcolor = (originalcolor + barycentrics);
-	//float3 color = vertex[id].color.xyz;
-	float3 color = { 0.95f, 0.9f, 0.5f };
-	//payload.colorAndDistance.xyz = worldNormal;
 
+	float3 color = vertex[id].color.xyz;
+	//payload.colorAndDistance.xyz = worldNormal;
 
 	RayDesc ray;
 	ray.Origin = worldRayOrigin;
